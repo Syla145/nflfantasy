@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fantasy Playbook – Live Win Probability</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   FANTASY PLAYBOOK – Live-Win-Probability-Dashboard für Sleeper-Ligen
+   Eine einzige Datei: einfach als index.html in ein GitHub-Repo legen
+   und GitHub Pages aktivieren.
+   ===================================================================== */
+:root{
+  --bg:#f2f1ee; --card:#ffffff; --ink:#1b1b1a; --ink2:#55544f; --muted:#8a8984;
+  --grid:#ecebe7; --line:#dddcd7;
+  --a:#C9971C;  /* Team links  (Gold) */
+  --b:#D0393B;  /* Team rechts (Rot)  */
+  --live:#1f9d55;
+  --radius:18px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Poppins,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+.wrap{max-width:1280px;margin:0 auto;padding:16px 14px 60px}
+
+/* ---------- Kopfzeile ---------- */
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+@media(max-width:600px){.top h1{flex-basis:100%}.status{flex:1 1 auto;min-width:0}.sc b{font-size:22px}.scores{gap:6px}}
+.top h1{font-size:20px;font-weight:700;margin:0;letter-spacing:-.2px;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top h1 small{display:block;font-size:12px;font-weight:500;color:var(--muted);letter-spacing:0}
+.status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);background:#fff;border-radius:99px;padding:6px 11px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.live{background:var(--live);animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(31,157,85,.5)}70%{box-shadow:0 0 0 7px rgba(31,157,85,0)}100%{box-shadow:0 0 0 0 rgba(31,157,85,0)}}
+.btn{border:0;background:#fff;border-radius:99px;padding:7px 13px;font-size:13px;font-weight:500;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.btn.dark{background:var(--ink);color:#fff}
+.btn:active{transform:scale(.97)}
+select.btn{appearance:none;padding-right:13px}
+
+/* ---------- Filterleiste ---------- */
+.filterbar{background:#fff;border-radius:14px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.filterbar label{font-size:12px;color:var(--ink2);font-weight:500}
+.filterbar .lvl{flex:1 1 220px;display:flex;flex-direction:column;gap:2px}
+.filterbar .lvlname{font-size:14px;font-weight:600}
+input[type=range]{accent-color:var(--ink);width:100%}
+
+/* ---------- Grid & Karten ---------- */
+.grid{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:980px){.grid{grid-template-columns:1fr 1fr}}
+.card{background:var(--card);border-radius:var(--radius);box-shadow:0 1px 2px rgba(0,0,0,.05),0 8px 24px rgba(0,0,0,.04);padding:16px 16px 12px;position:relative;overflow:hidden}
+.head{display:grid;grid-template-columns:1fr auto 1fr;align-items:start;gap:6px}
+.team{display:flex;flex-direction:column;gap:3px;min-width:0}
+.team.b{align-items:flex-end;text-align:right}
+.av{width:40px;height:40px;border-radius:10px;object-fit:cover;background:#ddd;display:grid;place-items:center;font-weight:700;font-size:14px;color:#fff;flex:none}
+.tn{font-size:13px;font-weight:600;line-height:1.2;max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-top:4px;word-break:break-word}
+.rec{font-size:11px;color:var(--muted)}
+.scores{display:flex;align-items:center;gap:10px;padding-top:4px}
+.sc{text-align:center}
+.sc b{display:block;font-size:26px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1.1}
+.sc small{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.vs{width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;flex:none}
+.pbar{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
+.pbar span{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;width:52px}
+.pbar span:last-child{text-align:right}
+.bar{flex:1;height:5px;border-radius:99px;background:var(--grid);display:flex;gap:2px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:99px;transition:width .5s ease}
+.bar i.a{background:var(--a)} .bar i.b{background:var(--b)}
+
+.chart{position:relative;margin-top:6px;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.chart svg{display:block;overflow:visible}
+.mk{position:absolute;transform:translate(-50%,-50%);border-radius:50%;cursor:pointer}
+.mk.big{width:30px;height:30px;background:#fff;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.18);display:grid;place-items:center;overflow:hidden;font-size:10px;font-weight:700;color:#fff}
+.mk.big img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.mk.small{width:11px;height:11px;background:#fff;border:2px solid currentColor}
+.mk.endav{width:26px;height:26px;border-radius:8px;overflow:hidden;box-shadow:0 0 0 2px #fff,0 1px 4px rgba(0,0,0,.2);cursor:default}
+.mk.endav img,.mk.endav .av{width:100%;height:100%;border-radius:8px;font-size:10px}
+.tip{position:absolute;z-index:5;pointer-events:none;background:var(--ink);color:#fff;font-size:12px;line-height:1.35;border-radius:10px;padding:8px 10px;max-width:230px;box-shadow:0 6px 18px rgba(0,0,0,.2);opacity:0;transition:opacity .12s}
+.tip.on{opacity:1}
+.tip .t{color:#bdbcb7;font-size:11px}
+.sw{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px}
+
+/* ---------- Replay-Leiste ---------- */
+.replay{display:flex;align-items:center;gap:8px;margin-top:8px}
+.ibtn{width:30px;height:30px;border-radius:50%;border:0;background:#f3f2ef;display:grid;place-items:center;cursor:pointer;flex:none;font-size:12px;font-weight:600}
+.track{position:relative;flex:1;height:30px;cursor:pointer;touch-action:none}
+.track .rail{position:absolute;left:0;right:0;top:14px;height:2px;background:var(--line);border-radius:2px}
+.track .fill{position:absolute;left:0;top:14px;height:2px;background:var(--ink);border-radius:2px}
+.track .td{position:absolute;top:15px;width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%);background:#fff;border:2px solid currentColor}
+.track .td.past{background:currentColor}
+.track .hd{position:absolute;top:15px;width:14px;height:14px;border-radius:50%;background:var(--ink);transform:translate(-50%,-50%);box-shadow:0 0 0 3px #fff}
+.livepill{font-size:11px;font-weight:600;border:0;border-radius:99px;padding:5px 9px;background:#f3f2ef;color:var(--ink2);cursor:pointer;flex:none}
+.livepill.on{background:rgba(31,157,85,.12);color:var(--live)}
+.foot{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:11px;color:var(--ink2)}
+.chip{background:#f3f2ef;border-radius:99px;padding:3px 9px}
+.chip.bad{background:#fde8e8;color:#9b1c1c;font-weight:600}
+.chip.good{background:#e7f6ee;color:#17693b;font-weight:600}
+details.plays{margin-top:8px;border-top:1px solid var(--grid);padding-top:6px}
+details.plays summary{font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;list-style:none;padding:4px 0}
+details.plays summary::-webkit-details-marker{display:none}
+.pl{display:grid;grid-template-columns:44px 1fr auto;gap:8px;align-items:center;font-size:12px;padding:6px 0;border-bottom:1px solid var(--grid)}
+.pl:last-child{border:0}
+.pl .tm{color:var(--muted);font-size:11px}
+.pl .nm{font-weight:600}
+.lg{display:inline-block;width:16px;height:16px;border-radius:5px;overflow:hidden;vertical-align:-3px;margin-right:6px}
+.lg .av{width:16px;height:16px;border-radius:5px;font-size:7px}
+.pl .lb{color:var(--ink2)}
+.pl .pt{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.pl .pt small{display:block;font-weight:500;color:var(--muted)}
+
+/* ---------- Einstellungen ---------- */
+.drawer{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;z-index:50}
+.drawer.on{display:block}
+.panel{position:absolute;right:0;top:0;bottom:0;width:min(420px,100%);background:#fff;padding:20px 18px 40px;overflow:auto;box-shadow:-10px 0 30px rgba(0,0,0,.15)}
+.panel h2{font-size:18px;margin:0 0 14px}
+.panel h3{font-size:13px;margin:22px 0 8px;color:var(--ink2);text-transform:uppercase;letter-spacing:.6px}
+.row{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.row label{font-size:13px;font-weight:500}
+.row .hint{font-size:11px;color:var(--muted)}
+.txt{border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:14px;width:100%}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}
+.checks label{display:flex;align-items:center;gap:7px;font-size:13px}
+.checks input{accent-color:var(--ink);width:16px;height:16px}
+.seg{display:flex;background:#f3f2ef;border-radius:10px;padding:3px}
+.seg button{flex:1;border:0;background:transparent;border-radius:8px;padding:7px 6px;font-size:12px;cursor:pointer}
+.seg button.on{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.1);font-weight:600}
+
+/* ---------- Willkommen / Hinweise ---------- */
+.hero{background:#fff;border-radius:var(--radius);padding:26px 20px;max-width:560px;margin:40px auto;box-shadow:0 8px 24px rgba(0,0,0,.05)}
+.hero h2{margin:0 0 6px;font-size:22px}
+.hero p{color:var(--ink2);font-size:14px;line-height:1.5}
+.note{background:#fff7e0;color:#6b4e00;border-radius:12px;padding:9px 12px;font-size:12px;margin-bottom:12px;line-height:1.45}
+.err{background:#fde8e8;color:#9b1c1c}
+.empty{color:var(--muted);font-size:13px;padding:30px 0;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<!-- Einstellungen -->
+<div class="drawer" id="drawer">
+  <div class="panel" id="panel"></div>
+</div>
+
+<script>
+/* =====================================================================
+   1) KONFIGURATION – hier kannst du Standardwerte fest eintragen
+   ===================================================================== */
+const CONFIG = {
+  LEAGUE_ID: '1339316557553098752',   // Die echte Dynastie          // ← deine Sleeper-League-ID (aus der URL: sleeper.com/leagues/<ID>/...)
+  POLL_LIVE_SEC: 30,      // Update-Intervall während Spiele laufen (Sekunden)
+  POLL_IDLE_SEC: 300,     // Update-Intervall wenn kein Spiel läuft
+  GAME_MINUTES: 200,      // angenommene Echtzeit-Dauer eines NFL-Spiels (für die Zeitachse)
+  LOAD_PHOTOS: true,      // Spielerfotos von Sleeper laden (sonst Initialen)
+};
+
+/* Detailgrad-Regler: welche Plays werden als Marker im Graphen gezeigt */
+const LEVELS = [
+  { name:'Nur Touchdowns',          cats:['td'],                                   minYds:0,  minPts:0 },
+  { name:'TDs + Big Plays (20+ Yd)',cats:['td','rec','rush','neg'],                minYds:20, minPts:0 },
+  { name:'Alle Catches & Läufe',    cats:['td','rec','rush','neg','kick','def'],   minYds:0,  minPts:0 },
+  { name:'Jedes Play',              cats:['td','rec','rush','pass','neg','kick','def','pts'], minYds:0, minPts:0 },
+];
+const CATS = { td:'Touchdowns & 2-Pt', rec:'Catches', rush:'Läufe', pass:'Pässe (QB)', kick:'Kicker', def:'Defense', neg:'Turnover / Fehlschüsse', pts:'Sonstige Punkte' };
+const DEFAULT_PROJ = { QB:17, RB:11, WR:11, TE:8, K:8, DEF:7, DL:6, LB:7, DB:6 };
+
+/* =====================================================================
+   2) HILFSFUNKTIONEN
+   ===================================================================== */
+const $ = (s, el=document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const f1 = v => (Math.round(v*10)/10).toFixed(1);
+const f2 = v => (Math.round(v*100)/100).toFixed(2);
+const pct = p => (p*100).toFixed(1) + '%';
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const MIN = 60000;
+const fmtDay = new Intl.DateTimeFormat('de-DE', { weekday:'short' });
+const fmtHM  = new Intl.DateTimeFormat('de-DE', { hour:'2-digit', minute:'2-digit' });
+const fmtT = t => fmtDay.format(t).replace('.', '') + ' ' + fmtHM.format(t);
+const initials = s => (String(s||'?').replace(/[^A-Za-zÄÖÜäöü0-9 ]/g,' ').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('') || '?').toUpperCase();
+const hueOf = s => { let h=0; for (const c of String(s)) h = (h*31 + c.charCodeAt(0)) % 360; return h; };
+const avHtml = (url, name, cls='av') =>
+  url ? `<img class="${cls}" src="${esc(url)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;${cls}&quot; style=&quot;background:hsl(${hueOf(name)} 45% 45%)&quot;>${esc(initials(name))}</div>'">`
+      : `<div class="${cls}" style="background:hsl(${hueOf(name)} 45% 45%)">${esc(initials(name))}</div>`;
+
+async function getJSON(url) {
+  const r = await fetch(url, { cache:'no-store' });
+  if (!r.ok) throw new Error(`HTTP ${r.status} – ${url}`);
+  return r.json();
+}
+// Normalverteilung (Abramowitz-Stegun)
+function erf(x){ const s=Math.sign(x); x=Math.abs(x); const t=1/(1+0.3275911*x);
+  const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x); return s*y; }
+const Phi = z => 0.5*(1+erf(z/Math.SQRT2));
+
+const store = {
+  get(k, d=null){ try{ const v=localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ console.warn('localStorage voll?', e); } },
+  del(k){ try{ localStorage.removeItem(k); }catch{} },
+};
+
+// Nur fantasy-relevante Stat-Keys merken (hält den Speicher klein)
+const STAT_KEY = k => /^(pass_|rec|rush_|fum|fg|xp|sack|int|ff|safe|blk_|def_|st_|kr_|pr_|idp_|pts_allow|yds_allow|bonus_)/.test(k) && !/(_lng|rank)/.test(k);
+function slimStats(s){ const o={}; if(!s) return o; for (const k in s) if (STAT_KEY(k) && typeof s[k]==='number' && s[k]!==0) o[k]=s[k]; return o; }
+function diffStats(prev={}, cur={}){ const d={}; const keys=new Set([...Object.keys(prev),...Object.keys(cur)]);
+  for (const k of keys){ const v=(cur[k]||0)-(prev[k]||0); if (Math.abs(v)>1e-9) d[k]=Math.round(v*100)/100; } return d; }
+
+/* =====================================================================
+   3) PLAY-ERKENNUNG: aus der Stat-Differenz zwischen zwei Updates
+      wird ein Play mit Kategorie, Yards und Beschriftung
+   ===================================================================== */
+function classify(ds, d, pos){
+  const g = k => +(ds && ds[k]) || 0, y = v => Math.round(v);
+  if (!ds || !Object.keys(ds).length){
+    if (d >= 5.5) return { cat:'td',  label:`+${f1(d)} Pkt (vermutl. TD)`, yds:0, td:true, guess:true };
+    if (d < 0)    return { cat:'neg', label:`${f1(d)} Pkt`, yds:0, guess:true };
+    return { cat:'pts', label:`+${f1(d)} Pkt`, yds:0, guess:true };
+  }
+  if (g('pass_td')>0) return { cat:'td', td:true, yds:g('pass_yd'), label:`TD-Pass${g('pass_yd')>0?` (${y(g('pass_yd'))} Yd)`:''}` };
+  if (g('rec_td')>0)  return { cat:'td', td:true, yds:g('rec_yd'),  label:`TD-Catch${g('rec_yd')>0?` (${y(g('rec_yd'))} Yd)`:''}` };
+  if (g('rush_td')>0) return { cat:'td', td:true, yds:g('rush_yd'), label:`TD-Lauf${g('rush_yd')>0?` (${y(g('rush_yd'))} Yd)`:''}` };
+  const otherTd = Object.keys(ds).find(k => /_td$/.test(k) && ds[k]>0 && !/^(pass|rec|rush)_td$/.test(k));
+  if (otherTd) return { cat:'td', td:true, yds:0, label: pos==='DEF' ? 'Defense-/ST-Touchdown' : 'Return-Touchdown' };
+  if (g('pass_2pt')+g('rec_2pt')+g('rush_2pt')>0) return { cat:'td', yds:0, label:'2-Point-Conversion' };
+  if (g('pass_int')>0) return { cat:'neg', yds:0, label:'Interception geworfen' };
+  if (g('fum_lost')>0) return { cat:'neg', yds:0, label:'Fumble verloren' };
+  if (g('fgm')>0){
+    const b = ['fgm_50p','fgm_40_49','fgm_30_39','fgm_20_29','fgm_0_19'].find(k=>g(k)>0);
+    const m = { fgm_50p:'50+', fgm_40_49:'40–49', fgm_30_39:'30–39', fgm_20_29:'20–29', fgm_0_19:'<20' };
+    return { cat:'kick', yds:g('fgm_yds'), label: g('fgm_yds') ? `${y(g('fgm_yds'))}-Yd-Field-Goal` : `Field Goal${b?` (${m[b]} Yd)`:''}` };
+  }
+  if (g('xpm')>0) return { cat:'kick', yds:0, label:'Extrapunkt' };
+  if (g('fgmiss')>0 || g('xpmiss')>0) return { cat:'neg', yds:0, label: g('fgmiss') ? 'Field Goal verschossen' : 'Extrapunkt verschossen' };
+  if (pos==='DEF' || pos==='DL' || pos==='LB' || pos==='DB'){
+    const lab = g('sack')>0?'Sack' : g('int')>0?'Interception' : g('fum_rec')>0?'Fumble Recovery' : g('safe')>0?'Safety'
+              : g('ff')>0?'Forced Fumble' : g('blk_kick')>0?'Blocked Kick' : g('idp_tkl')>0?'Tackle' : null;
+    if (lab) return { cat:'def', yds:0, label:lab };
+    return { cat:'def', yds:0, label: d<0 ? `Punkte zugelassen (${f1(d)})` : `+${f1(d)} Pkt` };
+  }
+  if (g('rec')>0)  { const n=g('rec'); return { cat:'rec', yds:g('rec_yd'), label: n>1 ? `${n} Catches · ${y(g('rec_yd'))} Yd` : `${y(g('rec_yd'))}-Yd-Catch` }; }
+  if (g('rush_att')>0 || g('rush_yd')) { const n=g('rush_att'); return { cat:'rush', yds:g('rush_yd'), label: n>1 ? `${n} Läufe · ${y(g('rush_yd'))} Yd` : `${y(g('rush_yd'))}-Yd-Lauf` }; }
+  if (g('pass_cmp')>0 || g('pass_yd')) { const n=g('pass_cmp'); return { cat:'pass', yds:g('pass_yd'), label: n>1 ? `${n} Pässe · ${y(g('pass_yd'))} Yd` : `${y(g('pass_yd'))}-Yd-Pass` }; }
+  if (g('rec_yd')) return { cat:'rec', yds:g('rec_yd'), label:`${y(g('rec_yd'))} Yd Catch-Korrektur` };
+  return { cat: d<0?'neg':'pts', yds:0, label:`${d>0?'+':''}${f1(d)} Pkt` };
+}
+
+/* =====================================================================
+   4) DATENQUELLE: SLEEPER (live) + ESPN-Scoreboard (Spieluhr)
+   ===================================================================== */
+const SL  = 'https://api.sleeper.app/v1';   // offizielle, dokumentierte API
+const SL2 = 'https://api.sleeper.com';      // inoffiziell: Live-Stats & Projections
+const ESPN_TO_SLEEPER = { WSH:'WAS' };
+
+class SleeperSource {
+  constructor(leagueId, week){ this.id = leagueId; this.weekWanted = week; this.demo = false; }
+  now(){ return Date.now(); }
+  async init(){
+    const [state, league, users, rosters] = await Promise.all([
+      getJSON(`${SL}/state/nfl`), getJSON(`${SL}/league/${this.id}`),
+      getJSON(`${SL}/league/${this.id}/users`), getJSON(`${SL}/league/${this.id}/rosters`) ]);
+    this.season = league.season;
+    this.seasonType = state.season_type === 'post' ? 'post' : 'regular';
+    const cur = state.season === league.season ? (state.display_week || state.week || 1) : 1;
+    this.week = this.weekWanted || clamp(cur, 1, 18);
+    this.scoring = league.scoring_settings || {};
+    const um = Object.fromEntries(users.map(u => [u.user_id, u]));
+    const teams = {};
+    for (const r of rosters){
+      const u = um[r.owner_id] || {}, s = r.settings || {};
+      const av = (u.metadata?.avatar && /^https?:/.test(u.metadata.avatar)) ? u.metadata.avatar
+               : u.avatar ? `https://sleepercdn.com/avatars/thumbs/${u.avatar}` : null;
+      teams[r.roster_id] = { name: u.metadata?.team_name || u.display_name || `Team ${r.roster_id}`, owner: u.display_name || '', avatar: av,
+        record: `${s.wins||0}-${s.losses||0}${s.ties?'-'+s.ties:''}` };
+    }
+    const pos = new Set(['QB','RB','WR','TE','K','DEF']);
+    (league.roster_positions||[]).forEach(p => { if (/^(DL|LB|DB|IDP)/.test(p)) ['DL','LB','DB'].forEach(x=>pos.add(x)); });
+    this.posQuery = [...pos].map(p => `position[]=${p}`).join('&');
+    return { name: league.name, season: this.season, week: this.week, teams };
+  }
+  // Projections → erwartete Punkte pro Spieler (+ Spielerinfos)
+  async projections(){
+    const items = await getJSON(`${SL2}/projections/nfl/${this.season}/${this.week}?season_type=${this.seasonType}&${this.posQuery}`);
+    const rec = this.scoring.rec ?? 0;
+    const key = rec >= 0.99 ? 'pts_ppr' : rec >= 0.49 ? 'pts_half_ppr' : 'pts_std';
+    const proj = {}, players = {};
+    for (const it of items){
+      const st = it.stats || {};
+      let p = st[key];
+      if (p == null){ p = 0; for (const k in this.scoring) if (typeof st[k]==='number') p += st[k]*this.scoring[k]; }
+      proj[it.player_id] = p;
+      players[it.player_id] = playerInfo(it);
+    }
+    return { proj, players };
+  }
+  // Live-Stats aller Spieler dieser Woche
+  async stats(){
+    const items = await getJSON(`${SL2}/stats/nfl/${this.season}/${this.week}?season_type=${this.seasonType}&${this.posQuery}`);
+    const out = {}, players = {};
+    for (const it of items){ out[it.player_id] = slimStats(it.stats); players[it.player_id] = playerInfo(it); }
+    return { stats: out, players };
+  }
+  // Matchups: Punkte pro Spieler & Team
+  async poll(){
+    const ms = await getJSON(`${SL}/league/${this.id}/matchups/${this.week}`);
+    const r = {};
+    for (const m of ms) r[m.roster_id] = { mid: m.matchup_id, points: m.custom_points ?? m.points ?? 0,
+      starters: (m.starters||[]).filter(p => p && p !== '0'), pp: m.players_points || {} };
+    return r;
+  }
+  // NFL-Spielplan & Spieluhr (für Restspielzeit + Zeitachse)
+  async games(){
+    const st = this.seasonType === 'post' ? 3 : 2, wk = this.week > 18 ? this.week - 18 : this.week;
+    const j = await getJSON(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${this.season}&seasontype=${st}&week=${wk}`);
+    return (j.events||[]).map(ev => {
+      const c = ev.competitions?.[0] || {}, s = c.status || ev.status || {}, comps = c.competitors || [];
+      const ab = t => ESPN_TO_SLEEPER[t?.team?.abbreviation] || t?.team?.abbreviation;
+      const idAbbr = {}; comps.forEach(t => idAbbr[String(t.team?.id ?? t.id)] = ab(t));
+      return { id: ev.id, start: Date.parse(ev.date), state: s.type?.state || 'pre', period: s.period || 0, clock: s.clock ?? 900,
+        detail: s.type?.shortDetail || '', teams: comps.map(ab), idAbbr,
+        home: ab(comps.find(t => t.homeAway === 'home') || comps[0]), away: ab(comps.find(t => t.homeAway === 'away') || comps[1]) };
+    });
+  }
+  // Fallback, falls Namen fehlen: schlanke Spielerliste (max. 1×/Tag laden)
+  // Spielerliste inkl. ESPN-ID (für die Zuordnung der Plays) – max. 1×/Tag laden, schlank im Browser speichern
+  async playersFallback(){
+    const k = 'sfd:players2', c = store.get(k);
+    if (c && Date.now() - c.t < 864e5) return c.p;
+    const all = await getJSON(`${SL}/players/nfl`), p = {};
+    for (const id in all){ const x = all[id]; if (!x.team && x.position !== 'DEF') continue;
+      p[id] = { name: x.position==='DEF' ? `${x.first_name||id} ${x.last_name||''}`.trim() : `${x.first_name||''} ${x.last_name||''}`.trim(), pos: x.position, team: x.team };
+      if (x.espn_id) p[id].espn = String(x.espn_id); }
+    store.del('sfd:players'); store.set(k, { t: Date.now(), p }); return p;
+  }
+}
+function playerInfo(it){
+  const p = it.player || {}, pos = p.position || (it.player_id && /^[A-Z]{2,3}$/.test(it.player_id) ? 'DEF' : '');
+  return { name: `${p.first_name||''} ${p.last_name||''}`.trim() || it.player_id, pos, team: it.team || p.team };
+}
+
+/* =====================================================================
+   5) DEMO-DATENQUELLE – simuliert eine komplette Woche (fiktive Liga)
+   ===================================================================== */
+function rng(seed){ return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+class DemoSource {
+  constructor(){
+    this.demo = true; const R = this.r = rng(20261118);
+    const pick = a => a[Math.floor(R()*a.length)];
+    const pois = m => { let L=Math.exp(-m), k=0, p=1; do { k++; p*=R(); } while (p>L); return k-1; };
+    const expo = m => -Math.log(1-R())*m;
+    // Spielplan einer typischen Woche (UTC): TNF, London, 19:00, 22:05/22:25, SNF, MNF
+    const base = Date.UTC(2026, 10, 13, 1, 15);
+    const slot = h => base + h*3600e3;
+    this.gamesList = [
+      { teams:['DET','GB'],  start: slot(0) },
+      { teams:['JAX','NYJ'], start: slot(61.25) },
+      { teams:['KC','BUF'],  start: slot(64.75) }, { teams:['MIA','NE'], start: slot(64.75) },
+      { teams:['PHI','DAL'], start: slot(64.75) }, { teams:['CHI','MIN'], start: slot(64.75) },
+      { teams:['SF','SEA'],  start: slot(67.83) }, { teams:['LAR','ARI'], start: slot(68.17) },
+      { teams:['BAL','PIT'], start: slot(72.08) },
+      { teams:['CIN','CLE'], start: slot(96) },
+    ];
+    const allTeams = this.gamesList.flatMap(g => g.teams);
+    this.teamGame = {}; this.gamesList.forEach(g => g.teams.forEach(t => this.teamGame[t] = g));
+    const FN = ['J.','M.','D.','T.','C.','A.','K.','B.','L.','R.','S.','N.'];
+    const LN = ['Wagner','Brooks','Hayes','Carter','Fischer','Morgan','Reed','Becker','Coleman','Price','Hoffmann','Bennett','Sutton','Graves','Klein','Foster','Walsh','Lange','Doyle','Ramsey','Keller','Barrett','Nolan','Fleming','Hart','Vogel','Pierce','Mercer','Sander','Quinn'];
+    const TEAMS = ['Bratwurst Bombers','Isar Ironmen','Hafen Haie','Brezel Blitz','Alpen Avalanche','Kiez Kings','Ruhrpott Rhinos','Schwarzwald Wölfe','Nordsee Narwale','Spree Sprinter'];
+    const OWN = ['mia_k','jonas23','lenni','fabi_b','sophie.m','tim_r','lukas99','nele','max_h','paul_f'];
+    this.scoring = { rec:0.5, rec_yd:0.1, rec_td:6, rush_yd:0.1, rush_td:6, pass_yd:0.04, pass_td:4, pass_int:-2, fum_lost:-2,
+      fgm_0_19:3, fgm_20_29:3, fgm_30_39:3, fgm_40_49:4, fgm_50p:5, xpm:1, sack:1, int:2, fum_rec:2, def_td:6 };
+    this.teams = {}; this.rosters = {}; this.players = {}; this.proj = {}; this.plays = {};
+    const SLOTS = ['QB','RB','RB','WR','WR','TE','WR','K','DEF'];
+    let pid = 1; const usedDef = new Set();
+    for (let r = 1; r <= 10; r++){
+      const w = Math.floor(R()*9)+1;
+      this.teams[r] = { name: TEAMS[r-1], owner: OWN[r-1], avatar:null, record:`${w}-${10-w}` };
+      const starters = [];
+      for (const pos of SLOTS){
+        let id, team;
+        if (pos === 'DEF'){ do { team = pick(allTeams); } while (usedDef.has(team)); usedDef.add(team); id = team;
+          this.players[id] = { name: `${team} Defense`, pos, team }; }
+        else { id = 'd'+(pid++); team = pick(allTeams); this.players[id] = { name: `${pick(FN)} ${pick(LN)}`, pos, team }; }
+        starters.push(id);
+        this.plays[id] = this.genPlays(pos, this.teamGame[team].start, R, pois, expo);
+        const exp = { QB:18, RB:12, WR:11, TE:8, K:8, DEF:7 }[pos];
+        this.proj[id] = Math.max(2, exp * (0.75 + R()*0.5));
+      }
+      this.rosters[r] = { mid: Math.ceil(r/2), starters };
+    }
+    this.sim = this.gamesList[0].start - 10*MIN;
+    this.end = Math.max(...this.gamesList.map(g => g.start)) + CONFIG.GAME_MINUTES*MIN + 5*MIN;
+  }
+  genPlays(pos, kick, R, pois, expo){
+    const out = [], tt = () => kick + (6 + R()*(CONFIG.GAME_MINUTES-16))*MIN, S = this.scoring;
+    const add = (st) => { let p=0; for (const k in st) p += (S[k]||0)*st[k]; out.push({ t: tt(), st, p }); };
+    const yd = (m, big=0.08) => Math.max(1, Math.round(R()<big ? 20+expo(18) : expo(m)));
+    if (pos==='QB'){ for (let i=pois(21);i--;) { const y=yd(10,.1); add(R()<.075 ? {pass_cmp:1,pass_yd:y,pass_td:1} : {pass_cmp:1,pass_yd:y}); }
+      for (let i=pois(.8);i--;) add({pass_int:1}); for (let i=pois(3);i--;) add({rush_att:1,rush_yd:yd(5,.05)}); }
+    if (pos==='RB'){ for (let i=pois(14);i--;) { const y=Math.round(expo(4.3)) - (R()<.15?2:0); add(R()<.04 ? {rush_att:1,rush_yd:Math.max(1,y),rush_td:1} : {rush_att:1,rush_yd:y}); }
+      for (let i=pois(3);i--;) add({rec:1,rec_yd:yd(7,.06)}); if (R()<.05) add({fum_lost:1}); }
+    if (pos==='WR'||pos==='TE'){ for (let i=pois(pos==='WR'?5:4);i--;) { const y=yd(pos==='WR'?11:9,pos==='WR'?.14:.08); add(R()<.1 ? {rec:1,rec_yd:y,rec_td:1} : {rec:1,rec_yd:y}); } }
+    if (pos==='K'){ for (let i=pois(1.8);i--;) { const b = R(); add(b<.15?{fgm:1,fgm_50p:1}:b<.45?{fgm:1,fgm_40_49:1}:{fgm:1,fgm_30_39:1}); } for (let i=pois(2.5);i--;) add({xpm:1}); }
+    if (pos==='DEF'){ for (let i=pois(2.4);i--;) add({sack:1}); for (let i=pois(.9);i--;) add({int:1}); for (let i=pois(.6);i--;) add({fum_rec:1}); if (R()<.12) add({def_td:1}); }
+    return out.sort((a,b) => a.t-b.t);
+  }
+  now(){ return this.sim; }
+  async init(){ this.season='2026'; this.week=11; return { name:'Demo-Liga (fiktiv)', season:'2026', week:11, teams:this.teams }; }
+  async projections(){ return { proj:this.proj, players:this.players }; }
+  async stats(){ const out = {};
+    for (const id in this.plays){ const s={}; for (const pl of this.plays[id]) if (pl.t <= this.sim) for (const k in pl.st) s[k]=(s[k]||0)+pl.st[k]; out[id]=s; }
+    return { stats: out, players: this.players }; }
+  async poll(){ const r = {};
+    for (const rid in this.rosters){ const ro = this.rosters[rid], pp = {}; let tot = 0;
+      for (const id of ro.starters){ let p=0; for (const pl of this.plays[id]) if (pl.t <= this.sim) p += pl.p; pp[id]=Math.round(p*100)/100; tot += pp[id]; }
+      r[rid] = { mid: ro.mid, points: Math.round(tot*100)/100, starters: ro.starters, pp }; }
+    return r; }
+  async games(){ const G = CONFIG.GAME_MINUTES*MIN;
+    return this.gamesList.map(g => { const el = this.sim - g.start, state = el < 0 ? 'pre' : el > G ? 'post' : 'in';
+      const frac = clamp(el/G, 0, 1), q = Math.min(4, Math.floor(frac*4)+1), clock = Math.round((1 - (frac*4 - (q-1)))*900);
+      return { start:g.start, teams:g.teams, state, period: state==='in'?q:0, clock: state==='in'?clock:900, detail:'' }; }); }
+  // Simulationsuhr vorspulen, Pausen zwischen den Spielslots überspringen
+  advance(step){ const G = CONFIG.GAME_MINUTES*MIN; let t = this.sim + step;
+    const live = s => this.gamesList.some(g => s >= g.start - 5*MIN && s <= g.start + G);
+    if (!live(t)){ const nx = this.gamesList.map(g => g.start - 5*MIN).filter(s => s > t).sort((a,b)=>a-b)[0]; if (nx) t = nx; }
+    this.sim = Math.min(t, this.end); return this.sim < this.end; }
+}
+
+/* =====================================================================
+   6) ENGINE: Pollen → Änderungen erkennen → Win Probability → Verlauf
+   ===================================================================== */
+const S = {
+  ds:null, meta:null, teams:{}, players:{}, proj:{}, games:[], progress:{}, scoring:{},
+  H:null, hKey:null, matchups:[], view:{}, statsOK:true, gamesOK:true, live:false, allFinal:false,
+  lastUpdate:0, timer:null, errors:[], pending:{},
+  settings: Object.assign({ level:1, cats:LEVELS[1].cats, minYds:20, minPts:0, stepMode:false, photos:CONFIG.LOAD_PHOTOS, poll:CONFIG.POLL_LIVE_SEC, custom:false }, store.get('sfd:settings', {})),
+};
+const saveSettings = () => store.set('sfd:settings', S.settings);
+
+function progressMap(games){
+  const m = {};
+  for (const g of games){
+    let f = 1;
+    if (g.state === 'post') f = 0;
+    else if (g.state === 'in') f = g.period > 4 ? 0.03 : clamp(((4 - g.period)*900 + (+g.clock||0)) / 3600, 0, 1);
+    for (const t of g.teams) m[t] = { f, state: g.state };
+  }
+  return m;
+}
+function remaining(pid, cur){
+  const team = S.players[pid]?.team;
+  if (S.games.length){ const g = S.progress[team]; return g ? g.f : 0; }   // kein Spiel = Bye
+  return cur > 0 ? 0.4 : 1;   // ohne Spielplan-Daten: grobe Schätzung
+}
+// Siegwahrscheinlichkeit Team A: Normalverteilung über (aktuell + Rest-Projektion)
+function teamDist(ro, pre, fOf){
+  let mu = pre ? 0 : ro.points, v = 0;
+  for (const pid of ro.starters){
+    const pos = S.players[pid]?.pos, pr = Math.max(0, S.proj[pid] ?? DEFAULT_PROJ[pos] ?? 8);
+    const f = pre ? 1 : fOf ? fOf(pid) : remaining(pid, ro.pp[pid] || 0);
+    mu += pr*f; const sd = Math.max(2.5, 0.65*pr) * Math.sqrt(f); v += sd*sd;
+  }
+  return [mu, v];
+}
+function wp(roA, roB, pre=false, fOf=null){
+  const [ma, va] = teamDist(roA, pre, fOf), [mb, vb] = teamDist(roB, pre, fOf), sd = Math.sqrt(va + vb);
+  if (sd < 0.01) return { p: ma > mb ? 1 : ma < mb ? 0 : 0.5, ma, mb };
+  return { p: clamp(Phi((ma - mb)/sd), 0, 1), ma, mb };
+}
+
+async function loadGames(){
+  try { S.games = await S.ds.games(); S.gamesOK = true; }
+  catch(e){ S.gamesOK = false; console.warn('Spielplan (ESPN) nicht erreichbar', e); }
+  S.progress = progressMap(S.games);
+  S.live = S.games.some(g => g.state === 'in');
+  S.allFinal = S.games.length > 0 && S.games.every(g => g.state === 'post');
+}
+async function loadStats(){
+  try { const r = await S.ds.stats(); S.statsOK = true; Object.entries(r.players).forEach(([k,v]) => { if (!S.players[k] || !S.players[k].name) S.players[k] = v; }); return r.stats; }
+  catch(e){ S.statsOK = false; console.warn('Stats-Endpunkt nicht erreichbar → Plays werden nur über Punkte erkannt', e); return null; }
+}
+
+async function tick({ silent=false } = {}){
+  const now = S.ds.now();
+  if (!silent || S.ds.demo) await loadGames();
+  const R = await S.ds.poll();
+  const H = S.H;
+  // Matchups bilden
+  const byMid = {};
+  for (const rid in R){ const m = R[rid].mid; if (m == null) continue; (byMid[m] ||= []).push(+rid); }
+  S.matchups = Object.keys(byMid).map(Number).sort((a,b)=>a-b).filter(m => byMid[m].length === 2);
+  for (const m of S.matchups){ const [a,b] = byMid[m].sort((x,y)=>x-y);
+    if (!H.m[m]) H.m[m] = { a, b, pts:[], ev:[] };
+    H.m[m].pre = wp(R[a], R[b], true).p; S.view[m] ||= { cursor:null, playing:false, speed:1 }; }
+
+  // Fehlende Spielerinfos nachladen
+  const allStarters = Object.values(R).flatMap(r => r.starters);
+  if (!S.ds.demo && allStarters.some(p => !S.players[p]?.name)){
+    try { const fb = await S.ds.playersFallback(); for (const p of allStarters) if (!S.players[p]?.name && fb[p]) S.players[p] = fb[p]; } catch {}
+  }
+
+  // Welche Starter haben neue Punkte?
+  const first = !Object.keys(H.lastPP).length, changed = [];
+  for (const rid in R) for (const pid of R[rid].starters){
+    const cur = +R[rid].pp[pid] || 0, prev = H.lastPP[pid];
+    if (prev !== undefined && Math.abs(cur - prev) > 0.004) changed.push({ pid, rid:+rid, d: cur - prev });
+  }
+  const pendingIds = Object.keys(S.pending);
+  let diffs = {};
+  if (changed.length || pendingIds.length || (first && S.games.some(g => g.state !== 'pre'))){
+    const st = await loadStats();
+    if (st){
+      for (const c of changed) diffs[c.pid] = diffStats(H.lastStats[c.pid], st[c.pid]);
+      // Nachträgliche Einordnung, wenn Stats beim letzten Update noch hinterherhingen
+      for (const pid of pendingIds){ if (diffs[pid]) continue; const d = diffStats(H.lastStats[pid], st[pid]);
+        if (Object.keys(d).length){ const ev = S.pending[pid]; Object.assign(ev, classify(d, ev.d, S.players[pid]?.pos), { guess:false }); }
+        delete S.pending[pid]; }
+      for (const pid of allStarters) H.lastStats[pid] = st[pid] || {};
+    }
+  }
+
+  // Pro Matchup: Siegchance, Snapshot, Events
+  for (const m of S.matchups){
+    const M = H.m[m], ra = R[M.a], rb = R[M.b], w = wp(ra, rb);
+    const last = M.pts[M.pts.length - 1], p0 = last ? last[3] : M.pre;
+    const evs = changed.filter(c => c.rid === M.a || c.rid === M.b);
+    if (!last || evs.length || (S.live && now - last[0] > 5*MIN) || Math.abs(last[1]-ra.points) > 0.004 || Math.abs(last[2]-rb.points) > 0.004 || Math.abs(last[3]-w.p) > 0.004)
+      M.pts.push([now, +f2(ra.points), +f2(rb.points), +w.p.toFixed(4), +f1(w.ma), +f1(w.mb)]);
+    for (const c of evs){
+      const pos = S.players[c.pid]?.pos, cl = classify(diffs[c.pid], c.d, pos);
+      const ev = { t: now, side: c.rid === M.a ? 'a' : 'b', pid: c.pid, d: +f2(c.d), p0, p1: +w.p.toFixed(4), ...cl };
+      M.ev.push(ev);
+      if (cl.guess && S.statsOK) S.pending[c.pid] = ev;
+    }
+  }
+  for (const rid in R) for (const pid of R[rid].starters) H.lastPP[pid] = +R[rid].pp[pid] || 0;
+  S.lastUpdate = Date.now();
+  if (!S.ds.demo) store.set(S.hKey, H);
+}
+
+/* =====================================================================
+   7) ZEITACHSE: komprimiert – nur Zeiten, in denen Spiele laufen
+   ===================================================================== */
+function timeScale(x0, x1){
+  const G = CONFIG.GAME_MINUTES*MIN, GAP = 25*MIN;
+  const nowT = S.ds.now();
+  let wins = S.games.map(g => [g.start, Math.max(g.start + G, g.endT || 0, g.state === 'in' ? Math.min(nowT, g.start + 6*3600e3) : 0)]);
+  const allPts = S.matchups.flatMap(m => S.H.m[m].pts.map(p => p[0]));
+  if (!wins.length){ const lo = Math.min(...allPts, S.ds.now()), hi = Math.max(...allPts, S.ds.now(), lo + 60*MIN); wins = [[lo, hi]]; }
+  wins.sort((a,b) => a[0]-b[0]);
+  const merged = [];
+  for (const w of wins){ const l = merged[merged.length-1]; if (l && w[0] <= l[1]) l[1] = Math.max(l[1], w[1]); else merged.push([...w]); }
+  const segs = []; let acc = 0;
+  for (const [s,e] of merged){ segs.push({ s, e, o: acc }); acc += (e - s) + GAP; }
+  const total = Math.max(1, acc - GAP);
+  const u = t => {
+    if (t <= segs[0].s) return 0;
+    for (let i = 0; i < segs.length; i++){ const g = segs[i];
+      if (t <= g.e) return t >= g.s ? g.o + (t - g.s) : segs[i-1].o + (segs[i-1].e - segs[i-1].s) + GAP*((t - segs[i-1].e)/(g.s - segs[i-1].e)); }
+    return total;
+  };
+  const x = t => x0 + (x1 - x0) * u(t) / total;
+  x.invert = px => { const uu = clamp((px - x0)/(x1 - x0), 0, 1) * total;
+    for (let i = 0; i < segs.length; i++){ const g = segs[i], len = g.e - g.s;
+      if (uu <= g.o + len) return uu >= g.o ? g.s + (uu - g.o) : segs[i-1].e + (g.s - segs[i-1].e)*((uu - (g.o - GAP))/GAP); }
+    return segs[segs.length-1].e; };
+  x.start = segs[0].s; x.end = segs[segs.length-1].e;
+  x.kicks = [...new Set(S.games.map(g => g.start))].sort((a,b)=>a-b);
+  return x;
+}
+
+/* =====================================================================
+   8) DARSTELLUNG
+   ===================================================================== */
+const shown = e => {
+  const F = S.settings;
+  if (!F.cats.includes(e.cat)) return false;
+  if (Math.abs(e.d) < F.minPts) return false;
+  if (!e.td && ['rec','rush','pass'].includes(e.cat) && (e.yds||0) < F.minYds) return false;
+  return true;
+};
+const isBig = e => e.td || Math.abs(e.d) >= 6;
+const photo = pid => (S.settings.photos && !S.ds.demo && S.players[pid]?.pos !== 'DEF') ? `https://sleepercdn.com/content/nfl/players/thumb/${pid}.jpg` : null;
+const pname = pid => S.players[pid]?.name || pid;
+
+function seriesFor(m, cursor){
+  const M = S.H.m[m], x = timeScale(0,1);
+  let pts = [[x.start, 0, 0, M.pre, null, null], ...M.pts.filter(p => p[0] > x.start)];
+  let ev = M.ev.filter(shown);
+  if (cursor != null){ pts = pts.filter(p => p[0] <= cursor); ev = ev.filter(e => e.t <= cursor); }
+  if (S.settings.stepMode){   // Graph bewegt sich nur bei gefilterten Plays
+    const lastP = pts[pts.length-1], keep = [pts[0]];
+    for (const e of ev){ const p = pts.find(q => q[0] === e.t); if (p) keep.push(p); }
+    if (lastP !== keep[keep.length-1]) keep.push(lastP);
+    pts = keep;
+  }
+  return { pts, ev };
+}
+
+function renderAll(){
+  const app = $('#app');
+  if (!S.matchups.length){ app.querySelector('.grid').innerHTML = `<div class="empty">Keine Matchups für diese Woche gefunden.</div>`; return; }
+  const grid = $('.grid');
+  for (const m of S.matchups){
+    let card = document.getElementById('mu-'+m);
+    if (!card){ card = document.createElement('div'); card.className = 'card'; card.id = 'mu-'+m; card.innerHTML = cardSkeleton(); grid.appendChild(card); bindCard(card, m); }
+    renderCard(m);
+  }
+  renderStatus();
+}
+function cardSkeleton(){ return `<div class="head"></div><div class="pbar"></div><div class="chart"><div class="tip"></div></div>
+  <div class="replay"><button class="ibtn play" aria-label="Replay abspielen">▶</button><div class="track"></div><button class="ibtn spd" aria-label="Geschwindigkeit">1×</button><button class="livepill on">LIVE</button></div>
+  <div class="foot"></div><details class="plays"><summary></summary><div class="plist"></div></details>`; }
+
+function stateAt(m, cursor){
+  const M = S.H.m[m];
+  const pts = cursor == null ? M.pts : M.pts.filter(p => p[0] <= cursor);
+  const l = pts[pts.length-1];
+  return l ? { sa:l[1], sb:l[2], p:l[3], ma:l[4], mb:l[5] } : { sa:0, sb:0, p:M.pre, ma:null, mb:null };
+}
+
+function renderCard(m){
+  const card = document.getElementById('mu-'+m), M = S.H.m[m], V = S.view[m];
+  const A = S.teams[M.a] || { name:'?' }, B = S.teams[M.b] || { name:'?' };
+  const st = stateAt(m, V.cursor);
+  card.querySelector('.head').innerHTML = `
+    <div class="team a">${avHtml(A.avatar, A.name)}<div class="tn">${esc(A.name)}</div><div class="rec">${esc(A.record||'')}</div></div>
+    <div class="scores"><div class="sc"><b>${f2(st.sa)}</b><small>${st.ma!=null ? 'Proj. '+f1(st.ma) : '&nbsp;'}</small></div><div class="vs">VS</div>
+      <div class="sc"><b>${f2(st.sb)}</b><small>${st.mb!=null ? 'Proj. '+f1(st.mb) : '&nbsp;'}</small></div></div>
+    <div class="team b">${avHtml(B.avatar, B.name)}<div class="tn">${esc(B.name)}</div><div class="rec">${esc(B.record||'')}</div></div>`;
+  card.querySelector('.pbar').innerHTML = `<span>${pct(st.p)}</span><div class="bar"><i class="a" style="width:${st.p*100}%"></i><i class="b" style="width:${(1-st.p)*100}%"></i></div><span>${pct(1-st.p)}</span>`;
+  renderChart(card, m);
+  renderTrack(card, m);
+  // Fußzeile: Peaks & Bad Beat
+  const all = [M.pre, ...M.pts.map(p => p[3])], peakA = Math.max(...all), peakB = 1 - Math.min(...all);
+  const fin = S.allFinal && V.cursor == null && M.pts.length, chips = [];
+  chips.push(`<span class="chip"><i class="sw" style="background:var(--a)"></i>Peak ${pct(peakA)}</span>`);
+  chips.push(`<span class="chip"><i class="sw" style="background:var(--b)"></i>Peak ${pct(peakB)}</span>`);
+  if (fin){ const aWon = st.sa > st.sb, loserPeak = aWon ? peakB : peakA, loser = aWon ? B : A, winner = aWon ? A : B, winMin = aWon ? Math.min(...all) : 1 - Math.max(...all);
+    if (loserPeak >= 0.85) chips.push(`<span class="chip bad">💀 Bad Beat: ${esc(loser.name)} hatte ${pct(loserPeak)}</span>`);
+    if (winMin <= 0.15) chips.push(`<span class="chip good">🔥 Comeback: ${esc(winner.name)} lag bei ${pct(winMin)}</span>`); }
+  card.querySelector('.foot').innerHTML = chips.join('');
+  // Play-Liste
+  const ev = M.ev.filter(shown).slice().reverse();
+  card.querySelector('.plays summary').textContent = `▾ Plays im Filter (${ev.length})`;
+  card.querySelector('.plist').innerHTML = ev.length ? ev.slice(0, 80).map(e => {
+    const sideTeam = e.side === 'a' ? A : B, dp = (e.side==='a' ? e.p1 - e.p0 : e.p0 - e.p1)*100;
+    return `<div class="pl"><div class="tm">${fmtT(e.t).replace(' ','<br>')}</div>
+      <div><span class="nm"><span class="lg" style="box-shadow:0 0 0 2px var(--${e.side})">${avHtml(sideTeam.avatar, sideTeam.name)}</span>${esc(pname(e.pid))}</span> <span class="lb">· ${esc(e.label)}</span><div class="tm">${esc(sideTeam.name)}</div></div>
+      <div class="pt">${e.d>0?'+':''}${f1(e.d)}<small>${dp>=0?'+':''}${dp.toFixed(1)}%</small></div></div>`; }).join('') : `<div class="empty">Noch keine Plays in diesem Filter.</div>`;
+}
+
+const DIM = () => ({ h: innerWidth < 600 ? 230 : 270, ml: 34, mr: 30, mt: 16, mb: 30 });
+function renderChart(card, m){
+  const box = card.querySelector('.chart'), W = box.clientWidth || 340, D = DIM(), H = D.h;
+  const x = timeScale(D.ml, W - D.mr), y = p => D.mt + (1 - p) * (H - D.mt - D.mb);
+  const V = S.view[m], { pts, ev } = seriesFor(m, V.cursor);
+  const M = S.H.m[m], A = S.teams[M.a], B = S.teams[M.b];
+  let svg = `<svg width="${W}" height="${H}" role="img" aria-label="Siegwahrscheinlichkeit ${esc(A?.name)} gegen ${esc(B?.name)}">`;
+  // Raster
+  for (const v of [0, .2, .4, .6, .8, 1]){ svg += `<line x1="${D.ml}" x2="${W-D.mr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>
+    <text x="${D.ml-6}" y="${y(v)+3.5}" font-size="10" text-anchor="end" fill="var(--muted)">${v*100}%</text>`; }
+  svg += `<line x1="${D.ml}" x2="${W-D.mr}" y1="${y(.5)}" y2="${y(.5)}" stroke="var(--line)" stroke-dasharray="3 4"/>`;
+  // X-Ticks (Kickoff-Zeiten)
+  let lastX = -1e9; const ticks = [...x.kicks.map(t => ({ t, l1: fmtDay.format(t).replace('.',''), l2: fmtHM.format(t) }))];
+  if (S.allFinal) ticks.push({ t: x.end, l1:'Final', l2:'' });
+  for (const k of ticks){ const xx = x(k.t); if (xx - lastX < 44 && k.l1 !== 'Final') continue; if (k.l1==='Final' && xx - lastX < 30) continue; lastX = xx;
+    svg += `<line x1="${xx}" x2="${xx}" y1="${D.mt}" y2="${H-D.mb}" stroke="var(--grid)"/>
+      <text x="${xx}" y="${H-D.mb+13}" font-size="10" text-anchor="middle" fill="var(--muted)">${k.l1}</text>
+      <text x="${xx}" y="${H-D.mb+25}" font-size="10" text-anchor="middle" fill="var(--muted)">${k.l2}</text>`; }
+  // Jetzt-Linie
+  const now = S.ds.now();
+  if (V.cursor == null && S.live && now > x.start && now < x.end) svg += `<line x1="${x(now)}" x2="${x(now)}" y1="${D.mt}" y2="${H-D.mb}" stroke="var(--live)" stroke-width="1" stroke-dasharray="2 3"/>`;
+  if (V.cursor != null) svg += `<line x1="${x(V.cursor)}" x2="${x(V.cursor)}" y1="${D.mt}" y2="${H-D.mb}" stroke="var(--ink)" stroke-width="1" opacity=".35"/>`;
+  // Linien (mit Lücken gestrichelt, wenn keine Daten aufgezeichnet wurden)
+  const GAPMS = Math.max(15*MIN, 6*S.settings.poll*1000), GL = CONFIG.GAME_MINUTES*MIN;
+  const liveBetween = (a, b) => !S.games.length || S.games.some(g => g.start + 5*MIN < b - GAPMS/2 && g.start + GL > a + GAPMS/2);
+  const path = (fy) => { let solid = '', dash = '';
+    pts.forEach((p, i) => { const X = x(p[0]).toFixed(1), Y = fy(p[3]).toFixed(1);
+      if (i === 0){ solid += `M${X},${Y}`; return; }
+      const q = pts[i-1], qx = x(q[0]).toFixed(1), qy = fy(q[3]).toFixed(1);
+      const hop = S.settings.stepMode ? `L${X},${qy}L${X},${Y}` : `L${X},${Y}`;
+      if (p[0] - q[0] > GAPMS && liveBetween(q[0], p[0])){ dash += `M${qx},${qy}${hop.replace(/^L/, 'L')}`; solid += `M${X},${Y}`; }
+      else solid += hop; });
+    return { solid, dash }; };
+  for (const [side, fy] of [['b', p => y(1-p)], ['a', p => y(p)]]){
+    const { solid, dash } = path(fy), c = `var(--${side})`;
+    svg += `<path d="${solid}" fill="none" stroke="${c}" stroke-width="7" stroke-opacity=".12" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="${solid}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dash ? `<path d="${dash}" fill="none" stroke="${c}" stroke-width="1.5" stroke-dasharray="3 4" opacity=".7"/>` : ''}`;
+  }
+  svg += `<line class="xh" x1="0" x2="0" y1="${D.mt}" y2="${H-D.mb}" stroke="var(--ink)" stroke-width="1" opacity="0"/>`;
+  svg += `</svg>`;
+  // Marker (HTML-Ebene für Fotos)
+  let mk = '';
+  const placed = [];
+  const evs = ev.slice().sort((a,b) => a.t - b.t);
+  evs.forEach((e) => {
+    const X = x(e.t), base = e.side === 'a' ? y(e.p1) : y(1 - e.p1), big = isBig(e);
+    let Y = base;
+    const idx = S.H.m[m].ev.indexOf(e);
+    if (big){   // große Marker nicht übereinander stapeln: abwechselnd nach oben/unten ausweichen
+      const lo = D.mt + 12, hi = H - D.mb - 12, dir = e.side === 'a' ? -1 : 1;
+      Y = clamp(base, lo, hi);
+      for (let k = 1; k <= 6 && placed.some(p => Math.hypot(p.x - X, p.y - Y) < 30); k++) Y = clamp(base + Math.ceil(k/2)*30*(k % 2 ? dir : -dir), lo, hi);
+      placed.push({ x:X, y:Y });
+      if (Math.abs(Y - base) > 4) mk += `<div class="mk small" style="left:${X}px;top:${base}px;color:var(--${e.side});width:7px;height:7px;cursor:default"></div>`;
+    }
+    if (big){ const ph = photo(e.pid), nm = pname(e.pid);
+      mk += `<div class="mk big" data-ev="${idx}" style="left:${X}px;top:${Y}px;box-shadow:0 0 0 2px var(--${e.side}),0 0 0 4px #fff,0 2px 6px rgba(0,0,0,.2);background:hsl(${hueOf(nm)} 40% 45%)">${ph ? `<img src="${ph}" alt="" loading="lazy" onerror="this.parentNode.textContent='${esc(initials(nm))}'">` : esc(initials(nm))}</div>`; }
+    else mk += `<div class="mk small" data-ev="${idx}" style="left:${X}px;top:${Y}px;color:var(--${e.side})"></div>`;
+  });
+  // Team-Avatare am Linienende
+  const lp = pts[pts.length-1];
+  if (lp && pts.length > 1){ const X = x(lp[0]); let ya = y(lp[3]), yb = y(1 - lp[3]);
+    if (Math.abs(ya - yb) < 30){ const mid = (ya + yb)/2, s = ya <= yb ? -1 : 1; ya = mid + s*15; yb = mid - s*15; }
+    mk += `<div class="mk endav" style="left:${X+16}px;top:${clamp(ya,14,H-D.mb-14)}px">${avHtml(A?.avatar, A?.name)}</div>`;
+    mk += `<div class="mk endav" style="left:${X+16}px;top:${clamp(yb,14,H-D.mb-14)}px">${avHtml(B?.avatar, B?.name)}</div>`; }
+  const tip = box.querySelector('.tip');
+  box.innerHTML = svg + mk; box.appendChild(tip);
+  box._x = x; box._D = D; box._pts = pts;
+}
+
+function renderTrack(card, m){
+  const tr = card.querySelector('.track'), V = S.view[m], M = S.H.m[m];
+  const W = tr.clientWidth || 200, x = timeScale(6, W - 6), cur = V.cursor ?? S.ds.now();
+  const endX = x(Math.min(cur, x.end));
+  let h = `<div class="rail"></div><div class="fill" style="width:${endX}px"></div>`;
+  const sh = M.ev.filter(shown);
+  for (const e of sh) if (sh.length <= 60 || isBig(e))
+    h += `<i class="td ${e.t <= cur ? 'past' : ''}" style="left:${x(e.t)}px;color:var(--${e.side})"></i>`;
+  if (V.cursor != null) h += `<i class="hd" style="left:${endX}px"></i>`;
+  tr.innerHTML = h; tr._x = x;
+  card.querySelector('.livepill').classList.toggle('on', V.cursor == null);
+  card.querySelector('.play').textContent = V.playing ? '❚❚' : '▶';
+  card.querySelector('.spd').textContent = V.speed + '×';
+}
+
+function bindCard(card, m){
+  const V = S.view[m], box = card.querySelector('.chart'), tr = card.querySelector('.track');
+  // Tooltip / Fadenkreuz
+  const showTip = (px, py, html) => { const tip = box.querySelector('.tip'); tip.innerHTML = html; tip.classList.add('on');
+    const bw = box.clientWidth, tw = tip.offsetWidth; tip.style.left = clamp(px + 12, 0, bw - tw) + 'px'; tip.style.top = Math.max(0, py - 60) + 'px'; };
+  const hide = () => { box.querySelector('.tip')?.classList.remove('on'); const xh = box.querySelector('.xh'); if (xh) xh.setAttribute('opacity', 0); };
+  const onPtr = ev => {
+    const r = box.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top;
+    const mkEl = ev.target.closest('.mk[data-ev]');
+    const M = S.H.m[m], A = S.teams[M.a], B = S.teams[M.b];
+    if (mkEl){ const e = M.ev[+mkEl.dataset.ev]; if (!e) return; const T = e.side === 'a' ? A : B;
+      const p0 = e.side === 'a' ? e.p0 : 1 - e.p0, p1 = e.side === 'a' ? e.p1 : 1 - e.p1;
+      showTip(px, py, `<div class="t">${fmtT(e.t)}</div><b>${esc(pname(e.pid))}</b> · ${esc(e.label)}<br>${e.d>0?'+':''}${f1(e.d)} Pkt für ${esc(T.name)}<br>Siegchance ${pct(p0)} → <b>${pct(p1)}</b>${e.guess?'<div class="t">Play-Typ geschätzt</div>':''}`); return; }
+    const pts = box._pts, x = box._x; if (!pts || !pts.length || px < box._D.ml || px > box.clientWidth - box._D.mr) return hide();
+    const t = x.invert(px); let best = pts[0]; for (const p of pts) if (p[0] <= t) best = p; else break;
+    const xh = box.querySelector('.xh'); xh.setAttribute('x1', px); xh.setAttribute('x2', px); xh.setAttribute('opacity', .25);
+    showTip(px, py, `<div class="t">${fmtT(Math.min(t, S.ds.now()))}</div><i class="sw" style="background:var(--a)"></i>${esc(A.name)}: <b>${pct(best[3])}</b> · ${f2(best[1])}<br><i class="sw" style="background:var(--b)"></i>${esc(B.name)}: <b>${pct(1-best[3])}</b> · ${f2(best[2])}`);
+  };
+  box.addEventListener('pointermove', onPtr); box.addEventListener('pointerdown', onPtr);
+  box.addEventListener('pointerleave', hide);
+  // Replay-Steuerung
+  const setCursor = cx => { const r = tr.getBoundingClientRect(), x = tr._x; let t = x.invert(cx - r.left);
+    const lim = Math.min(S.ds.now(), x.end); if (t >= lim - 1000) t = null; V.cursor = t; renderCard(m); };
+  let drag = false;
+  tr.addEventListener('pointerdown', e => { drag = true; V.playing = false; tr.setPointerCapture(e.pointerId); setCursor(e.clientX); });
+  tr.addEventListener('pointermove', e => { if (drag) setCursor(e.clientX); });
+  tr.addEventListener('pointerup', () => drag = false);
+  card.querySelector('.livepill').onclick = () => { V.cursor = null; V.playing = false; renderCard(m); };
+  card.querySelector('.spd').onclick = () => { V.speed = { 1:2, 2:4, 4:8, 8:1 }[V.speed]; renderCard(m); };
+  card.querySelector('.play').onclick = () => {
+    if (V.playing){ V.playing = false; renderCard(m); return; }
+    const x = timeScale(0, 1000), lim = Math.min(S.ds.now(), x.end);
+    if (V.cursor == null || V.cursor >= lim) V.cursor = x.start;
+    V.playing = true; let lastTs = performance.now();
+    const step = ts => { if (!V.playing) return;
+      const dt = ts - lastTs; lastTs = ts;
+      const u = x(V.cursor) + dt / 20000 * 1000 * V.speed;   // 1× = ganze Woche in 20 s
+      V.cursor = x.invert(u);
+      if (V.cursor >= lim - 1000){ V.cursor = null; V.playing = false; }
+      renderCard(m); if (V.playing) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  };
+}
+
+function renderStatus(){
+  const live = S.live, nxt = S.games.filter(g => g.state === 'pre').map(g => g.start).sort((a,b)=>a-b)[0];
+  const running = S.games.filter(g => g.state === 'in').length;
+  const txt = S.ds.demo ? `Demo · Simulationszeit ${fmtT(S.ds.now())}` :
+    live ? `LIVE · ${running} Spiel${running>1?'e':''} · Update ${fmtHM.format(S.lastUpdate)}` :
+    S.allFinal ? `Woche beendet · Update ${fmtHM.format(S.lastUpdate)}` :
+    nxt ? `Nächster Kickoff ${fmtT(nxt)}` : `Update ${fmtHM.format(S.lastUpdate)}`;
+  $('#status').innerHTML = `<i class="dot ${live ? 'live' : ''}"></i>${esc(txt)}`;
+  const notes = [];
+  if (!S.statsOK && S.mode === 'record') notes.push('Live-Stats-Endpunkt nicht erreichbar – Plays werden nur über Punktänderungen erkannt (TD wird bei ≥ 5,5 Pkt geschätzt).');
+  if (!S.gamesOK) notes.push('Spieluhr (ESPN) nicht erreichbar – Restspielzeit wird geschätzt, Siegchancen sind ungenauer.');
+  if (!S.ds.demo && S.mode === 'record')
+    notes.push('ESPN Play-by-Play nicht erreichbar – der Verlauf wird nur aufgezeichnet, solange diese Seite offen ist. Gestrichelte Abschnitte = keine Aufzeichnung.');
+  if (!S.ds.demo && S.mode === 'replay' && S.unmatched.length)
+    notes.push(`Ohne Play-Zuordnung (Punkte kommen am Spielende als Block): ${S.unmatched.slice(0, 6).join(', ')}${S.unmatched.length > 6 ? ' …' : ''}`);
+  $('#notes').innerHTML = notes.map(n => `<div class="note">${esc(n)}</div>`).join('') + S.errors.map(e => `<div class="note err">${esc(e)}</div>`).join('');
+}
+
+/* =====================================================================
+   9) OBERFLÄCHE: Kopf, Filter, Einstellungen
+   ===================================================================== */
+function shell(){
+  const wk = S.ds.week;
+  $('#app').innerHTML = `
+    <div class="top"><h1>${esc(S.meta.name)}<small>Live Win Probability · Woche ${wk}</small></h1>
+      <div class="status" id="status"></div>
+      <select class="btn" id="week" aria-label="Woche">${Array.from({length:18},(_,i)=>`<option value="${i+1}" ${i+1===wk?'selected':''}>Woche ${i+1}</option>`).join('')}</select>
+      <button class="btn dark" id="openSettings">Einstellungen</button></div>
+    <div id="notes"></div>
+    <div class="filterbar">
+      <div class="lvl"><label for="lvl">Welche Plays zeigen?</label><div class="lvlname" id="lvlname"></div>
+        <input id="lvl" type="range" min="0" max="${LEVELS.length-1}" step="1" value="${S.settings.level}"></div>
+      <div class="lvl" style="flex:1 1 160px"><label for="yds">Mindest-Yards (Catches/Läufe/Pässe)</label><div class="lvlname" id="ydsname"></div>
+        <input id="yds" type="range" min="0" max="60" step="5" value="${S.settings.minYds}"></div>
+    </div>
+    <div class="grid"></div>`;
+  $('#week').onchange = e => { const u = new URL(location); u.searchParams.set('week', e.target.value); location = u; };
+  $('#openSettings').onclick = openSettings;
+  $('#lvl').oninput = e => { const L = LEVELS[+e.target.value]; Object.assign(S.settings, { level:+e.target.value, cats:[...L.cats], minYds:L.minYds, minPts:L.minPts, custom:false });
+    $('#yds').value = L.minYds; saveSettings(); updateFilterLabels(); renderAll(); };
+  $('#yds').oninput = e => { S.settings.minYds = +e.target.value; S.settings.custom = true; saveSettings(); updateFilterLabels(); renderAll(); };
+  updateFilterLabels();
+  addEventListener('resize', () => { clearTimeout(S._rs); S._rs = setTimeout(renderAll, 150); });
+}
+function updateFilterLabels(){
+  $('#lvlname').textContent = LEVELS[S.settings.level].name + (S.settings.custom ? ' (angepasst)' : '');
+  $('#ydsname').textContent = S.settings.minYds ? `ab ${S.settings.minYds} Yards` : 'alle Yards';
+}
+function openSettings(){
+  const F = S.settings, lid = S.ds.demo ? '' : S.ds.id;
+  $('#panel').innerHTML = `
+    <h2>Einstellungen</h2>
+    <div class="row"><label for="lid">Sleeper League-ID</label><input class="txt" id="lid" value="${esc(lid)}" placeholder="z. B. 1180208183993401344" inputmode="numeric">
+      <span class="hint">Steht in der Sleeper-URL: sleeper.com/leagues/<b>ID</b>/…</span></div>
+    <button class="btn dark" id="applyLid">Liga laden</button> <button class="btn" id="demoBtn">Demo ansehen</button>
+    <h3>Play-Filter</h3>
+    <div class="checks">${Object.entries(CATS).map(([k,v]) => `<label><input type="checkbox" data-cat="${k}" ${F.cats.includes(k)?'checked':''}>${v}</label>`).join('')}</div>
+    <div class="row" style="margin-top:12px"><label for="minpts">Mindest-Punkte pro Play: <b id="mpv">${F.minPts}</b></label><input type="range" id="minpts" min="0" max="10" step="0.5" value="${F.minPts}"></div>
+    <h3>Graph</h3>
+    <div class="row"><label>Linie bewegt sich bei …</label><div class="seg" id="mode"><button data-v="0" class="${!F.stepMode?'on':''}">jeder Punktänderung</button><button data-v="1" class="${F.stepMode?'on':''}">nur gefilterten Plays</button></div>
+      <span class="hint">„Nur gefilterte Plays“: kleine Punkte werden gesammelt und erst beim nächsten sichtbaren Play eingerechnet.</span></div>
+    <div class="row"><label><input type="checkbox" id="photos" ${F.photos?'checked':''}> Spielerfotos von Sleeper laden</label></div>
+    <div class="row"><label for="poll">Update-Intervall während Spielen: <b id="pollv">${F.poll}s</b></label><input type="range" id="poll" min="15" max="120" step="5" value="${F.poll}"></div>
+    <h3>Daten</h3>
+    <button class="btn" id="share">Link zur Liga kopieren</button> <button class="btn" id="reset">Verlauf dieser Woche löschen</button>
+    <p class="hint" style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:16px">Daten: Sleeper API (Liga, Matchups, Stats, Projections) und ESPN-Scoreboard (Spieluhr). Der Verlauf wird lokal in diesem Browser gespeichert.</p>
+    <button class="btn dark" id="close" style="margin-top:10px;width:100%">Fertig</button>`;
+  $('#drawer').classList.add('on');
+  const custom = () => { F.custom = true; saveSettings(); updateFilterLabels(); renderAll(); };
+  $('#panel').querySelectorAll('[data-cat]').forEach(c => c.onchange = () => { F.cats = [...$('#panel').querySelectorAll('[data-cat]:checked')].map(x => x.dataset.cat); custom(); });
+  $('#minpts').oninput = e => { F.minPts = +e.target.value; $('#mpv').textContent = F.minPts; custom(); };
+  $('#mode').onclick = e => { const b = e.target.closest('button'); if (!b) return; F.stepMode = b.dataset.v === '1'; $('#mode').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); saveSettings(); renderAll(); };
+  $('#photos').onchange = e => { F.photos = e.target.checked; saveSettings(); renderAll(); };
+  $('#poll').oninput = e => { F.poll = +e.target.value; $('#pollv').textContent = F.poll + 's'; saveSettings(); };
+  $('#applyLid').onclick = () => { const v = $('#lid').value.trim(); if (!v) return; store.set('sfd:league', v); const u = new URL(location); u.searchParams.set('league', v); u.searchParams.delete('demo'); u.searchParams.delete('week'); location = u; };
+  $('#demoBtn').onclick = () => { const u = new URL(location); u.searchParams.set('demo', '1'); location = u; };
+  $('#share').onclick = async () => { const u = new URL(location); u.search = ''; if (!S.ds.demo) u.searchParams.set('league', S.ds.id);
+    try { await navigator.clipboard.writeText(u.toString()); $('#share').textContent = 'Kopiert ✓'; } catch { prompt('Link:', u.toString()); } };
+  $('#reset').onclick = () => { if (S.ds.demo || !confirm('Aufgezeichneten Verlauf dieser Woche in diesem Browser löschen?')) return; store.del(S.hKey); location.reload(); };
+  const close = () => $('#drawer').classList.remove('on');
+  $('#close').onclick = close; $('#drawer').onclick = e => { if (e.target.id === 'drawer') close(); };
+}
+function welcome(msg){
+  $('#app').innerHTML = `<div class="hero"><h2>Fantasy Playbook</h2>
+    <p>Live-Siegwahrscheinlichkeit für alle Matchups deiner Sleeper-Liga – jedes Play, sobald es in Sleeper ankommt.</p>
+    ${msg ? `<div class="note err">${esc(msg)}</div>` : ''}
+    <div class="row"><label for="lid0">Sleeper League-ID</label><input class="txt" id="lid0" placeholder="z. B. 1180208183993401344" inputmode="numeric"></div>
+    <button class="btn dark" id="go">Liga laden</button> <button class="btn" id="demo0">Demo ansehen</button></div>`;
+  $('#go').onclick = () => { const v = $('#lid0').value.trim(); if (!v) return; store.set('sfd:league', v); const u = new URL(location); u.searchParams.set('league', v); location = u; };
+  $('#demo0').onclick = () => { const u = new URL(location); u.searchParams.set('demo','1'); location = u; };
+}
+
+/* =====================================================================
+   9b) REPLAY AUS DEM ESPN-PLAY-BY-PLAY
+       Jedes NFL-Play (mit echter Uhrzeit) wird mit euren Liga-Punkteregeln
+       in Fantasy-Punkte umgerechnet. Daraus entsteht der komplette Verlauf –
+       egal ob die Seite offen war oder nicht. Am Spielende wird mit den
+       offiziellen Sleeper-Punkten abgeglichen (Boni, Sonderregeln).
+   ===================================================================== */
+const CORE = 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl';
+const PAGE = 50;
+Object.assign(S, { mode:'replay', pbpRaw:{}, pbp:{}, pbpOK:true, dbLoaded:false, unmatched:[] });
+
+const idFrom = o => o == null ? null : String(o.id ?? (o.$ref || '').match(/teams\/(\d+)/)?.[1] ?? '');
+const pbpKey = () => `sfd:pbp:${S.ds.season}:${S.ds.week}`;
+
+async function fetchPlays(g){
+  const raw = S.pbpRaw[g.id] ||= { items: new Map(), count: 0 };
+  const url = p => `${CORE}/events/${g.id}/competitions/${g.id}/plays?limit=${PAGE}&page=${p}`;
+  const startPage = Math.max(1, Math.floor(raw.count / PAGE));   // live: nur die letzten Seiten neu laden
+  const first = await getJSON(url(startPage));
+  const rest = [];
+  for (let p = startPage + 1; p <= (first.pageCount || 1); p++) rest.push(getJSON(url(p)));
+  for (const pg of [first, ...await Promise.all(rest)]) for (const it of pg.items || []) raw.items.set(it.id, it);
+  raw.count = first.count ?? raw.items.size;
+  return [...raw.items.values()];
+}
+
+function fgKeys(d, made){
+  const p = made ? 'fgm' : 'fgmiss', st = { [p]: 1 };
+  if (made && d) st.fgm_yds = d;
+  if (d < 50) st[`${p}_${d<20?'0_19':d<30?'20_29':d<40?'30_39':'40_49'}`] = 1;
+  else if (S.scoring[`${p}_50p`] != null) st[`${p}_50p`] = 1;
+  else st[d < 60 ? `${p}_50_59` : `${p}_60p`] = 1;
+  return st;
+}
+const fgDist = (txt, y) => +((txt.match(/(\d+)[\s-]*(?:yard|yd)s?\s+field goal/i) || [])[1]) || y || 35;
+function ptsAllowVal(n){
+  const s = S.scoring, b = n===0?'0':n<=6?'1_6':n<=13?'7_13':n<=20?'14_20':n<=27?'21_27':n<=34?'28_34':'35p';
+  return (s['pts_allow_'+b] || 0) + (s.pts_allow || 0) * n;
+}
+
+// ESPN-Plays → [Zeit, Restspielzeit-Anteil, [[wer, stats, fixePunkte, Label], …]]
+function parseGame(g, items){
+  items = items.slice().sort((a,b) => (+a.sequenceNumber) - (+b.sequenceNumber));
+  const { home, away } = g, out = [];
+  let lastT = null, hs = 0, as = 0, kicked = false;
+  for (const it of items){
+    const tt = (it.type?.text || '').toLowerCase(), txt = it.text || '';
+    const t = it.wallclock ? Date.parse(it.wallclock) : (lastT ?? g.start);
+    lastT = t;
+    const period = it.period?.number ?? 0, clock = it.clock?.value ?? 900;
+    const f = /end of game|end game/.test(tt) ? 0 : period === 0 ? 1 : period > 4 ? 0.03 : clamp(((4 - period)*900 + clock)/3600, 0, 1);
+    const off = g.idAbbr[idFrom(it.start?.team)] || g.idAbbr[idFrom(it.team)] || home, def = off === home ? away : home;
+    const nh = it.homeScore ?? hs, na = it.awayScore ?? as;
+    const scorer = nh > hs ? home : na > as ? away : null;
+    const parts = (it.participants || []).map(p => ({ id: ((p.athlete?.$ref || '').match(/athletes\/(\d+)/) || [])[1], type: p.type }));
+    const P = ty => parts.find(p => p.type === ty)?.id;
+    const E = [], add = (who, st, fixed=null, lab=null) => { if (who) E.push([who, st, fixed, lab]); };
+    if (!kicked && it.wallclock && period >= 1){ kicked = true; const v = ptsAllowVal(0);
+      if (v) { add(`DEF:${home}`, {}, v, 'Kickoff · 0 Punkte zugelassen'); add(`DEF:${away}`, {}, v, 'Kickoff · 0 Punkte zugelassen'); } }
+    const y = +it.statYardage || 0, td = /touchdown/.test(tt), noPlay = /no play/i.test(txt);
+    const passer = P('passer'), rec = P('receiver'), rusher = P('rusher');
+    if (!noPlay){
+      if (/^(pass reception|passing touchdown)$/.test(tt) || (tt === 'pass' && rec)){
+        add(passer, { pass_att:1, pass_cmp:1, pass_yd:y, ...(td ? { pass_td:1 } : {}) });
+        add(rec, { rec:1, rec_yd:y, ...(td ? { rec_td:1 } : {}) });
+      } else if (/pass incompletion/.test(tt)) add(passer, { pass_att:1, pass_inc:1 });
+      else if (/^rush|^rushing touchdown/.test(tt)) add(rusher, { rush_att:1, rush_yd:y, ...(td ? { rush_td:1 } : {}) });
+      else if (/^sack/.test(tt)) add(`DEF:${def}`, { sack:1 });
+      else if (/interception/.test(tt)){ add(passer, { pass_int:1 }); add(`DEF:${td && scorer ? scorer : def}`, { int:1, ...(td ? { def_td:1 } : {}) }); }
+      else if (/fumble/.test(tt) && (it.isTurnover || /opponent|touchdown/.test(tt))){
+        add(P('fumbler') || rusher || rec || passer, { fum:1, fum_lost:1 });
+        add(`DEF:${td && scorer ? scorer : def}`, { fum_rec:1, ...(td ? { def_td:1 } : {}) });
+      } else if (/field goal good/.test(tt)) add(P('kicker') || P('scorer'), fgKeys(fgDist(txt, y), true));
+      else if (/(field goal (missed|no good)|blocked field goal)/.test(tt) && !td){
+        add(P('kicker'), fgKeys(fgDist(txt, y), false)); if (/blocked/.test(tt)) add(`DEF:${def}`, { blk_kick:1 }); }
+      else if (/safety/.test(tt)) add(`DEF:${scorer || def}`, { safe:1 });
+      else if (td && /(return|block).*touchdown/.test(tt)) add(`DEF:${scorer || def}`, { st_td:1 });
+      if (/extra point is good/i.test(txt) || tt === 'extra point good') add(P('patScorer') || P('kicker'), { xpm:1 });
+      else if (/extra point is (no good|blocked)/i.test(txt) || /extra point (missed|blocked)/.test(tt)) add(P('kicker'), { xpmiss:1 });
+      if (/two-point/i.test(txt) && /succeeds/i.test(txt)){
+        const tail = txt.split(/two-point/i)[1] || '';
+        if (/pass/i.test(tail)){ add(P('patScorer'), { rec_2pt:1 }); add(passer, { pass_2pt:1 }); } else add(P('patScorer'), { rush_2pt:1 });
+      }
+    }
+    // Defense: zugelassene Punkte (Bucket-Wertung neu berechnen)
+    if (nh !== hs) add(`DEF:${away}`, { pts_allow: nh - hs }, ptsAllowVal(nh) - ptsAllowVal(hs), `${nh} Punkte zugelassen`);
+    if (na !== as) add(`DEF:${home}`, { pts_allow: na - as }, ptsAllowVal(na) - ptsAllowVal(as), `${na} Punkte zugelassen`);
+    hs = nh; as = na;
+    out.push([t, +f.toFixed(4), E]);
+  }
+  const ts = out.map(p => p[0]);
+  return { id: g.id, home, away, start: g.start, end: ts.length ? Math.max(...ts) : g.start, final: g.state === 'post', plays: out };
+}
+
+function calcPts(st, pos, cum){
+  const s = S.scoring; let p = 0;
+  for (const k in st) if (s[k]) p += s[k] * st[k];
+  if (st.rec) p += (s['bonus_rec_' + String(pos || '').toLowerCase()] || 0) * st.rec;   // z. B. TE-Premium
+  for (const k in s){ const m = k.match(/^bonus_(rec|rush|pass)_yd_(\d+)$/); if (!m || !s[k]) continue;
+    const key = m[1] + '_yd', before = cum[key] || 0, after = before + (st[key] || 0), th = +m[2];
+    if (before < th && after >= th) p += s[k]; else if (before >= th && after < th) p -= s[k]; }
+  for (const k in st) cum[k] = (cum[k] || 0) + st[k];
+  return p;
+}
+
+// Restspielzeit-Anteil eines NFL-Teams zu einem Zeitpunkt
+function makeProgressAt(){
+  const byTeam = {};
+  for (const g of S.games){
+    const G = S.pbp[g.id], pt = G ? G.plays.map(p => p[0]) : [], pf = G ? G.plays.map(p => p[1]) : [];
+    const fn = t => {
+      if (G && G.final && t > G.end) return 0;
+      if (!G || !pt.length || t < pt[0]) return t < g.start ? 1 : (g.state === 'post' ? 0 : 1);
+      let lo = 0, hi = pt.length - 1, r = 0; while (lo <= hi){ const m = (lo + hi) >> 1; if (pt[m] <= t){ r = m; lo = m + 1; } else hi = m - 1; }
+      return pf[r];
+    };
+    for (const tm of g.teams) byTeam[tm] = fn;
+  }
+  return (team, t) => byTeam[team] ? byTeam[team](t) : 0;   // kein Spiel = Bye
+}
+
+function buildReplay(R){
+  const now = S.ds.now(), progressAt = makeProgressAt();
+  const gameOf = {}; for (const g of S.games) for (const tm of g.teams) gameOf[tm] = g;
+  // ESPN-Athlet / Defense → Sleeper-Starter
+  const who2pid = {}, unmatched = [];
+  for (const rid in R) for (const pid of R[rid].starters){
+    const pl = S.players[pid] || {}, isDef = pl.pos === 'DEF' || /^[A-Z]{2,3}$/.test(pid);
+    const w = isDef ? `DEF:${pid}` : pl.espn || null;
+    if (w) (who2pid[w] ||= []).push(pid); else unmatched.push(pl.name || pid);
+  }
+  S.unmatched = unmatched;
+  // Fantasy-Events pro Spieler
+  const evp = {};
+  for (const gid in S.pbp){ const G = S.pbp[gid], cum = {};
+    for (const [t, , E] of G.plays){
+      const merged = {};
+      for (const [who, st, fixed, lab] of E){ const pids = who2pid[who]; if (!pids) continue;
+        for (const pid of pids){ const c = cum[pid] ||= {}, pos = S.players[pid]?.pos;
+          const pts = fixed != null ? fixed : calcPts(st, pos, c);
+          const m = merged[pid] ||= { t, st:{}, pts:0, lab:null };
+          for (const k in st) m.st[k] = (m.st[k] || 0) + st[k];
+          m.pts += pts; if (lab) m.lab = lab; } }
+      for (const pid in merged){ const m = merged[pid]; if (Math.abs(m.pts) > 0.004 || m.lab) (evp[pid] ||= []).push(m); }
+    } }
+  // Abgleich mit Sleeper, sobald das Spiel des Spielers beendet ist
+  for (const rid in R) for (const pid of R[rid].starters){
+    const team = S.players[pid]?.team || pid, g = gameOf[team], G = g && S.pbp[g.id];
+    if (!G || !G.final) continue;
+    const est = (evp[pid] || []).reduce((a, e) => a + e.pts, 0), res = (+R[rid].pp[pid] || 0) - est;
+    if (Math.abs(res) >= 0.05) (evp[pid] ||= []).push({ t: G.end + 1000, st:{}, pts: res,
+      lab: est === 0 && !(evp[pid] || []).length ? 'Punkte (ohne Play-Daten)' : 'Bonus / Korrektur laut Sleeper', resid:true });
+  }
+  // Zeitraster: alle 3 Min., solange ein Spiel läuft
+  const grid = [];
+  const wins = S.games.filter(g => S.pbp[g.id]).map(g => [S.pbp[g.id].plays[0]?.[0] ?? g.start, g.state === 'in' ? now : S.pbp[g.id].end]).sort((a,b) => a[0]-b[0]);
+  const mw = []; for (const w of wins){ const l = mw[mw.length-1]; if (l && w[0] <= l[1]) l[1] = Math.max(l[1], w[1]); else mw.push([...w]); }
+  for (const [a, b] of mw) for (let t = a; t <= Math.min(b, now); t += 3*MIN) grid.push(t);
+
+  for (const m of S.matchups){
+    const M = S.H.m[m], A = R[M.a], B = R[M.b], all = [...A.starters, ...B.starters];
+    const ser = {};
+    for (const pid of all){ const ev = (evp[pid] || []).sort((x,y) => x.t - y.t); let c = 0; ser[pid] = { t: ev.map(e => e.t), c: ev.map(e => c += e.pts), ev }; }
+    const cumAt = (pid, t) => { const s = ser[pid]; let lo = 0, hi = s.t.length - 1, r = -1;
+      while (lo <= hi){ const k = (lo + hi) >> 1; if (s.t[k] <= t){ r = k; lo = k + 1; } else hi = k - 1; } return r < 0 ? 0 : s.c[r]; };
+    const stateAtT = t => {
+      const ro = side => { const st = side.starters; return { starters: st, pp:{}, points: st.reduce((a, p) => a + cumAt(p, t), 0) }; };
+      const ra = ro(A), rb = ro(B), fOf = pid => progressAt(S.players[pid]?.team || pid, t);
+      return { ra, rb, w: wp(ra, rb, false, fOf) };
+    };
+    const times = new Set(grid);
+    const evs = [];
+    for (const pid of all) for (const e of ser[pid].ev){ times.add(e.t); evs.push([pid, e]); }
+    const rows = [];
+    for (const t of [...times].sort((a,b) => a-b)){ if (t > now) continue; const { ra, rb, w } = stateAtT(t);
+      rows.push([t, +f2(ra.points), +f2(rb.points), +w.p.toFixed(4), +f1(w.ma), +f1(w.mb)]); }
+    // aktueller Stand laut Sleeper
+    if (S.games.some(g => g.state !== 'pre')){
+      const w = wp(A, B), last = rows[rows.length-1];
+      const tEnd = S.allFinal ? Math.max(...Object.values(S.pbp).map(G => G.end)) + 2000 : now;
+      if (!last || Math.abs(last[1] - A.points) > 0.004 || Math.abs(last[2] - B.points) > 0.004 || Math.abs(last[3] - w.p) > 0.004)
+        rows.push([Math.max(tEnd, last ? last[0] + 1 : 0), +f2(A.points), +f2(B.points), +w.p.toFixed(4), +f1(w.ma), +f1(w.mb)]);
+    }
+    M.pts = rows;
+    M.ev = evs.filter(([, e]) => e.t <= now).sort((x, y) => x[1].t - y[1].t).map(([pid, e]) => {
+      const pos = S.players[pid]?.pos, cl = classify(e.st, e.pts, pos);
+      if (e.lab){ cl.label = e.lab; cl.cat = e.resid ? 'pts' : (pos === 'DEF' ? 'def' : cl.cat); cl.td = cl.td && !e.resid; }
+      const p0 = stateAtT(e.t - 1).w.p, p1 = stateAtT(e.t).w.p;
+      return { t: e.t, side: A.starters.includes(pid) ? 'a' : 'b', pid, d: +f2(e.pts), p0: +p0.toFixed(4), p1: +p1.toFixed(4), ...cl };
+    });
+  }
+}
+
+async function refreshReplay(){
+  await loadGames();
+  const R = await S.ds.poll();
+  const byMid = {};
+  for (const rid in R){ const m = R[rid].mid; if (m == null) continue; (byMid[m] ||= []).push(+rid); }
+  S.matchups = Object.keys(byMid).map(Number).sort((a,b) => a-b).filter(m => byMid[m].length === 2);
+  for (const m of S.matchups){ const [a, b] = byMid[m].sort((x,y) => x-y);
+    S.H.m[m] = { a, b, pts:[], ev:[], pre: wp(R[a], R[b], true).p }; S.view[m] ||= { cursor:null, playing:false, speed:1 }; }
+  // Spielerliste mit ESPN-IDs
+  if (!S.dbLoaded){
+    try { const db = await S.ds.playersFallback();
+      for (const id in db) S.players[id] = { ...db[id], ...(S.players[id] || {}), espn: db[id].espn };
+      S.dbLoaded = true;
+    } catch(e){ console.warn('Spielerliste nicht ladbar', e); }
+  }
+  // Play-by-Play laden (beendete Spiele aus dem Speicher)
+  const cache = store.get(pbpKey(), {});
+  const todo = [];
+  for (const g of S.games){
+    if (g.state === 'pre' || S.pbp[g.id]?.final) continue;
+    if (g.state === 'post' && cache[g.id]?.final){ S.pbp[g.id] = cache[g.id]; continue; }
+    todo.push(g);
+  }
+  const res = await Promise.allSettled(todo.map(async g => { S.pbp[g.id] = parseGame(g, await fetchPlays(g)); }));
+  const failed = res.filter(r => r.status === 'rejected');
+  if (failed.length) console.warn('ESPN Play-by-Play Fehler', failed.map(f => f.reason));
+  if (todo.length && failed.length === todo.length && !Object.keys(S.pbp).length) { S.pbpOK = false; throw new Error('ESPN Play-by-Play nicht erreichbar'); }
+  for (const g of S.games) if (S.pbp[g.id]) g.endT = S.pbp[g.id].end;
+  // beendete Spiele speichern, alte Wochen aufräumen
+  const fin = {}; for (const id in S.pbp) if (S.pbp[id].final) fin[id] = S.pbp[id];
+  if (Object.keys(fin).length){
+    for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i);
+      const mm = k && k.match(/^sfd:pbp:(\d+):(\d+)$/);
+      if (mm && (mm[1] !== String(S.ds.season) || +mm[2] < S.ds.week - 2)) store.del(k); }
+    store.set(pbpKey(), fin);
+  }
+  buildReplay(R);
+  S.lastUpdate = Date.now();
+}
+
+/* =====================================================================
+   10) START
+   ===================================================================== */
+function schedule(){
+  clearTimeout(S.timer);
+  let ms;
+  if (S.ds.demo) ms = 1200;
+  else if (S.live) ms = S.settings.poll * 1000;
+  else { const nxt = S.games.filter(g => g.state === 'pre').map(g => g.start).sort((a,b)=>a-b)[0];
+    ms = nxt && nxt - Date.now() < 20*MIN ? 60e3 : CONFIG.POLL_IDLE_SEC * 1000; }
+  S.timer = setTimeout(async () => {
+    if (document.hidden && !S.ds.demo) return schedule();
+    try {
+      const more = S.ds.demo ? S.ds.advance(60e3) : true;
+      await (S.mode === 'replay' ? refreshReplay() : tick()); S.errors = [];
+      if (!more){ renderAll(); return; }
+    } catch(e){ console.error(e); S.errors = ['Update fehlgeschlagen: ' + e.message]; }
+    renderAll(); schedule();
+  }, ms);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.ds && !S.ds.demo){ clearTimeout(S.timer); (S.mode === 'replay' ? refreshReplay() : tick()).then(renderAll).catch(()=>{}).finally(schedule); } });
+
+async function main(){
+  const q = new URLSearchParams(location.search);
+  const demo = q.get('demo') === '1';
+  const league = q.get('league') || CONFIG.LEAGUE_ID || store.get('sfd:league');
+  if (!demo && !league) return welcome();
+  $('#app').innerHTML = `<div class="empty">Lade Liga …</div>`;
+  try {
+    S.ds = demo ? new DemoSource() : new SleeperSource(league, +q.get('week') || null);
+    S.meta = await S.ds.init(); S.teams = S.meta.teams; S.scoring = S.ds.scoring || {};
+    S.hKey = `sfd:hist:${demo ? 'demo' : league}:${S.ds.season}:${S.ds.week}`;
+    S.H = (!demo && store.get(S.hKey)) || { m:{}, lastPP:{}, lastStats:{} };
+    try { const pr = await S.ds.projections(); S.proj = pr.proj; S.players = { ...pr.players }; }
+    catch(e){ console.warn('Projections nicht erreichbar – Standardwerte je Position', e); }
+    if (demo){
+      S.mode = 'record';
+      // Verlauf bis zur Mitte des Sonntags vorsimulieren, danach läuft die Demo „live“ weiter
+      await tick({ silent:true });
+      const stop = S.ds.gamesList[6].start + 70*MIN;
+      while (S.ds.now() < stop){ S.ds.advance(3*MIN); await tick({ silent:true }); }
+    } else {
+      try { await refreshReplay(); }
+      catch(e){ console.warn('Replay nicht möglich → Live-Aufzeichnung', e); S.mode = 'record'; S.H = store.get(S.hKey) || { m:{}, lastPP:{}, lastStats:{} }; await tick(); }
+    }
+    shell(); renderAll(); schedule();
+  } catch(e){
+    console.error(e);
+    welcome(`Liga konnte nicht geladen werden (${e.message}). Stimmt die League-ID?`);
+  }
+}
+main();
+</script>
+</body>
+</html>
