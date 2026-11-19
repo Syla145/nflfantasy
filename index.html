@@ -858,7 +858,7 @@ function bindGlobal(){
     let lastTs = performance.now(), lastDraw = 0;
     const step = ts => { if (!G.playing) return;
       const dt = ts - lastTs, prev = G.cursor; lastTs = ts;
-      G.cursor = x.invert(x(G.cursor) + dt / 20000 * 1000 * G.speed);   // 1× = ganze Woche in 20 s
+      G.cursor = x.invert(x(G.cursor) + dt / 60000 * 1000 * G.speed);   // 1× = ganze Woche in 60 s
       for (const m of S.matchups) for (const e of S.H.m[m].ev) if (e.t > prev && e.t <= G.cursor && toastWorthy(e)) showToast(m, e);
       if (G.cursor >= L - 1000){ G.playing = false; G.cursor = null; setAllCursors(null); return; }
       if (ts - lastDraw > 30){ lastDraw = ts; for (const m of S.matchups) S.view[m].cursor = G.cursor; for (const m of S.matchups) renderCard(m); renderGlobal(); }
@@ -908,7 +908,7 @@ function bindCard(card, m){
     V.playing = true; let lastTs = performance.now();
     const step = ts => { if (!V.playing) return;
       const dt = ts - lastTs, prev = V.cursor; lastTs = ts;
-      const u = x(V.cursor) + dt / 20000 * 1000 * V.speed;   // 1× = ganze Woche in 20 s
+      const u = x(V.cursor) + dt / 60000 * 1000 * V.speed;   // 1× = ganze Woche in 60 s
       V.cursor = x.invert(u);
       // Pop-ups auch im Replay
       for (const e of S.H.m[m].ev) if (e.t > prev && e.t <= V.cursor && toastWorthy(e)) showToast(m, e);
