@@ -97,6 +97,13 @@ button.chip{border:0;cursor:pointer;font:inherit;font-size:11px;color:var(--ink2
 .tsub .lg{width:14px;height:14px;margin-right:5px;vertical-align:-2px}
 .tpts{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:#7be0a4}
 .tpts.neg{color:#ff8a8a}
+.gbar{position:sticky;top:8px;z-index:20;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border-radius:14px;padding:8px 12px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.05),0 6px 18px rgba(0,0,0,.06)}
+.gmid{flex:1;min-width:0}
+.glabel{font-size:12px;color:var(--ink2);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gbar .track{height:24px}.gbar .track .rail,.gbar .track .fill{top:11px}.gbar .track .td,.gbar .track .hd{top:12px}
+.ibtn.dark{background:var(--ink);color:#fff;width:36px;height:36px}
+.track .td.sm{width:7px;height:7px;border-width:1.5px;color:var(--muted)}
 /* ---------- Replay-Leiste ---------- */
 .replay{display:flex;align-items:center;gap:8px;margin-top:8px}
 .ibtn{width:30px;height:30px;border-radius:50%;border:0;background:#f3f2ef;display:grid;place-items:center;cursor:pointer;flex:none;font-size:12px;font-weight:600}
@@ -635,6 +642,7 @@ function renderAll(){
     card.classList.toggle('featured', m === feat); card.style.order = m === feat ? -1 : m;
     renderCard(m);
   }
+  renderGlobal();
   renderStatus();
 }
 function cardSkeleton(){ return `<div class="toasts"></div><div class="head"></div><div class="pbar"></div><div class="chart"><svg></svg><div class="mks"></div><div class="tip"></div></div>
@@ -814,6 +822,51 @@ function announceNew(){
   S.announce = true;
 }
 
+/* ---------- Gemeinsames Replay: alle Matchups gleichzeitig ---------- */
+S.G = { playing:false, speed:1, cursor:null };
+function setAllCursors(t){ for (const m of S.matchups){ const V = S.view[m]; V.cursor = t; V.playing = false; renderCard(m); } renderGlobal(); }
+function renderGlobal(){
+  const bar = $('#gbar'); if (!bar) return;
+  const G = S.G, tr = bar.querySelector('.track'), W = tr.clientWidth || 200, x = timeScale(6, W - 6);
+  const cur = G.cursor ?? S.ds.now(), endX = x(Math.min(cur, x.end));
+  // Big Plays aller Matchups als Punkte auf der Zeitleiste
+  let h = `<div class="rail"></div><div class="fill" style="width:${endX}px"></div>`;
+  for (const m of S.matchups) for (const e of S.H.m[m].ev) if (toastWorthy(e) || (e.td && !e.resid))
+    h += `<i class="td sm ${e.t <= cur ? 'past' : ''}" style="left:${x(e.t)}px"></i>`;
+  if (G.cursor != null) h += `<i class="hd" style="left:${endX}px"></i>`;
+  tr.innerHTML = h; tr._x = x;
+  bar.querySelector('.glabel').innerHTML = G.cursor != null ? `<b>Replay</b> · ${fmtT(G.cursor)}` : 'Alle Matchups gleichzeitig abspielen';
+  bar.querySelector('.gplay').textContent = G.playing ? '❚❚' : '▶';
+  bar.querySelector('.gspd').textContent = G.speed + '×';
+  bar.querySelector('.livepill').classList.toggle('on', S.matchups.every(m => S.view[m].cursor == null));
+}
+function bindGlobal(){
+  const bar = $('#gbar'), tr = bar.querySelector('.track'), G = S.G;
+  const lim = () => { const x = timeScale(0, 1000); return Math.min(S.ds.now(), x.end); };
+  const scrub = cx => { const r = tr.getBoundingClientRect(); let t = tr._x.invert(cx - r.left); if (t >= lim() - 1000) t = null; G.cursor = t; setAllCursors(t); };
+  let drag = false;
+  tr.addEventListener('pointerdown', e => { drag = true; G.playing = false; tr.setPointerCapture(e.pointerId); scrub(e.clientX); });
+  tr.addEventListener('pointermove', e => { if (drag) scrub(e.clientX); });
+  tr.addEventListener('pointerup', () => drag = false);
+  bar.querySelector('.livepill').onclick = () => { G.playing = false; G.cursor = null; setAllCursors(null); };
+  bar.querySelector('.gspd').onclick = () => { G.speed = { 1:2, 2:4, 4:8, 8:1 }[G.speed]; renderGlobal(); };
+  bar.querySelector('.gplay').onclick = () => {
+    if (G.playing){ G.playing = false; renderGlobal(); return; }
+    const x = timeScale(0, 1000), L = lim();
+    if (G.cursor == null || G.cursor >= L) G.cursor = x.start;
+    G.playing = true; setAllCursors(G.cursor); G.playing = true;
+    let lastTs = performance.now(), lastDraw = 0;
+    const step = ts => { if (!G.playing) return;
+      const dt = ts - lastTs, prev = G.cursor; lastTs = ts;
+      G.cursor = x.invert(x(G.cursor) + dt / 20000 * 1000 * G.speed);   // 1× = ganze Woche in 20 s
+      for (const m of S.matchups) for (const e of S.H.m[m].ev) if (e.t > prev && e.t <= G.cursor && toastWorthy(e)) showToast(m, e);
+      if (G.cursor >= L - 1000){ G.playing = false; G.cursor = null; setAllCursors(null); return; }
+      if (ts - lastDraw > 30){ lastDraw = ts; for (const m of S.matchups) S.view[m].cursor = G.cursor; for (const m of S.matchups) renderCard(m); renderGlobal(); }
+      requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  };
+}
+
 function bindCard(card, m){
   const V = S.view[m], box = card.querySelector('.chart'), tr = card.querySelector('.track');
   const showTip = (px, py, html) => { const tip = box.querySelector('.tip'); tip.innerHTML = html; tip.classList.add('on');
@@ -842,13 +895,14 @@ function bindCard(card, m){
   const setCursor = cx => { const r = tr.getBoundingClientRect(), x = tr._x; let t = x.invert(cx - r.left);
     const lim = Math.min(S.ds.now(), x.end); if (t >= lim - 1000) t = null; V.cursor = t; renderCard(m); };
   let drag = false;
-  tr.addEventListener('pointerdown', e => { drag = true; V.playing = false; tr.setPointerCapture(e.pointerId); setCursor(e.clientX); });
+  tr.addEventListener('pointerdown', e => { drag = true; V.playing = false; S.G.playing = false; tr.setPointerCapture(e.pointerId); setCursor(e.clientX); });
   tr.addEventListener('pointermove', e => { if (drag) setCursor(e.clientX); });
   tr.addEventListener('pointerup', () => drag = false);
   card.querySelector('.livepill').onclick = () => { V.cursor = null; V.playing = false; renderCard(m); };
   card.querySelector('.spd').onclick = () => { V.speed = { 1:2, 2:4, 4:8, 8:1 }[V.speed]; renderCard(m); };
   card.querySelector('.play').onclick = () => {
     if (V.playing){ V.playing = false; renderCard(m); return; }
+    S.G.playing = false; renderGlobal();
     const x = timeScale(0, 1000), lim = Math.min(S.ds.now(), x.end);
     if (V.cursor == null || V.cursor >= lim) V.cursor = x.start;
     V.playing = true; let lastTs = performance.now();
@@ -899,13 +953,16 @@ function shell(){
       <div class="lvl" style="flex:1 1 160px"><label for="yds">Mindest-Yards (Catches/Läufe/Pässe)</label><div class="lvlname" id="ydsname"></div>
         <input id="yds" type="range" min="0" max="60" step="5" value="${S.settings.minYds}"></div>
     </div>
+    <div class="gbar" id="gbar"><button class="ibtn gplay dark" aria-label="Alle abspielen">▶</button>
+      <div class="gmid"><div class="glabel"></div><div class="track"></div></div>
+      <button class="ibtn gspd" aria-label="Geschwindigkeit">1×</button><button class="livepill on">LIVE</button></div>
     <div class="grid"></div>`;
   $('#week').onchange = e => { const u = new URL(location); u.searchParams.set('week', e.target.value); location = u; };
   $('#openSettings').onclick = openSettings;
   $('#lvl').oninput = e => { const L = LEVELS[+e.target.value]; Object.assign(S.settings, { level:+e.target.value, cats:[...L.cats], minYds:L.minYds, minPts:L.minPts, custom:false });
     $('#yds').value = L.minYds; saveSettings(); updateFilterLabels(); renderAll(); };
   $('#yds').oninput = e => { S.settings.minYds = +e.target.value; S.settings.custom = true; saveSettings(); updateFilterLabels(); renderAll(); };
-  updateFilterLabels();
+  updateFilterLabels(); bindGlobal();
   addEventListener('resize', () => { clearTimeout(S._rs); S._rs = setTimeout(renderAll, 150); });
 }
 function updateFilterLabels(){
