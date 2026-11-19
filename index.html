@@ -81,6 +81,22 @@ input[type=range]{accent-color:var(--ink);width:100%}
 .tip .t{color:#bdbcb7;font-size:11px}
 .sw{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px}
 
+.card.featured{grid-column:1/-1;box-shadow:0 0 0 2px var(--ink),0 8px 24px rgba(0,0,0,.08)}
+.chip.feat{background:var(--ink);color:#fff;font-weight:600}
+button.chip{border:0;cursor:pointer;font:inherit;font-size:11px;color:var(--ink2)}
+.mks{position:absolute;inset:0;pointer-events:none}
+.mks .mk{pointer-events:auto}
+.toasts{position:absolute;left:10px;right:10px;top:10px;z-index:8;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.toast{display:flex;align-items:center;gap:10px;background:var(--ink);color:#fff;border-radius:14px;padding:9px 12px 9px 9px;box-shadow:0 10px 28px rgba(0,0,0,.28);
+  border-left:4px solid var(--c);transform:translateY(-12px) scale(.98);opacity:0;transition:transform .3s ease,opacity .3s ease}
+.toast.on{transform:none;opacity:1}
+.tph{width:40px;height:40px;border-radius:50%;flex:none;overflow:hidden;display:grid;place-items:center;font-weight:700;font-size:13px;box-shadow:0 0 0 2px var(--c)}
+.tph img{width:100%;height:100%;object-fit:cover}
+.ttx{flex:1;min-width:0;font-size:13px;line-height:1.3}
+.tsub{font-size:11px;color:#c9c8c3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tsub .lg{width:14px;height:14px;margin-right:5px;vertical-align:-2px}
+.tpts{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:#7be0a4}
+.tpts.neg{color:#ff8a8a}
 /* ---------- Replay-Leiste ---------- */
 .replay{display:flex;align-items:center;gap:8px;margin-top:8px}
 .ibtn{width:30px;height:30px;border-radius:50%;border:0;background:#f3f2ef;display:grid;place-items:center;cursor:pointer;flex:none;font-size:12px;font-weight:600}
@@ -433,7 +449,7 @@ const S = {
   ds:null, meta:null, teams:{}, players:{}, proj:{}, games:[], progress:{}, scoring:{},
   H:null, hKey:null, matchups:[], view:{}, statsOK:true, gamesOK:true, live:false, allFinal:false,
   lastUpdate:0, timer:null, errors:[], pending:{},
-  settings: Object.assign({ level:1, cats:LEVELS[1].cats, minYds:20, minPts:0, stepMode:false, photos:CONFIG.LOAD_PHOTOS, poll:CONFIG.POLL_LIVE_SEC, custom:false }, store.get('sfd:settings', {})),
+  settings: Object.assign({ level:1, cats:LEVELS[1].cats, minYds:20, minPts:0, stepMode:false, photos:CONFIG.LOAD_PHOTOS, toastPts:4, featured:'none', poll:CONFIG.POLL_LIVE_SEC, custom:false }, store.get('sfd:settings', {})),
 };
 const saveSettings = () => store.set('sfd:settings', S.settings);
 
@@ -597,18 +613,31 @@ function seriesFor(m, cursor){
   return { pts, ev };
 }
 
+function featuredMid(){
+  const f = S.settings.featured || 'none';
+  if (f.startsWith('team:')){ const rid = +f.slice(5); return S.matchups.find(m => S.H.m[m].a === rid || S.H.m[m].b === rid) ?? null; }
+  if (f === 'closest'){   // knappstes Matchup: Siegchance am nächsten an 50 % (nach Spielende: kleinster Punkteabstand)
+    const score = m => { const st = stateAt(m, null); return S.allFinal ? Math.abs(st.sa - st.sb) / 50 : Math.abs(st.p - 0.5); };
+    let best = null, bv = Infinity; for (const m of S.matchups){ const v = score(m); if (v < bv){ bv = v; best = m; } }
+    const prev = S._closest;   // kleine Hysterese, damit die Karten nicht ständig springen
+    if (prev != null && S.matchups.includes(prev) && score(prev) - bv < 0.02) best = prev;
+    return S._closest = best;
+  }
+  return null;
+}
 function renderAll(){
   const app = $('#app');
   if (!S.matchups.length){ app.querySelector('.grid').innerHTML = `<div class="empty">Keine Matchups für diese Woche gefunden.</div>`; return; }
-  const grid = $('.grid');
+  const grid = $('.grid'), feat = featuredMid();
   for (const m of S.matchups){
     let card = document.getElementById('mu-'+m);
     if (!card){ card = document.createElement('div'); card.className = 'card'; card.id = 'mu-'+m; card.innerHTML = cardSkeleton(); grid.appendChild(card); bindCard(card, m); }
+    card.classList.toggle('featured', m === feat); card.style.order = m === feat ? -1 : m;
     renderCard(m);
   }
   renderStatus();
 }
-function cardSkeleton(){ return `<div class="head"></div><div class="pbar"></div><div class="chart"><div class="tip"></div></div>
+function cardSkeleton(){ return `<div class="toasts"></div><div class="head"></div><div class="pbar"></div><div class="chart"><svg></svg><div class="mks"></div><div class="tip"></div></div>
   <div class="replay"><button class="ibtn play" aria-label="Replay abspielen">▶</button><div class="track"></div><button class="ibtn spd" aria-label="Geschwindigkeit">1×</button><button class="livepill on">LIVE</button></div>
   <div class="foot"></div><details class="plays"><summary></summary><div class="plist"></div></details>`; }
 
@@ -619,60 +648,86 @@ function stateAt(m, cursor){
   return l ? { sa:l[1], sb:l[2], p:l[3], ma:l[4], mb:l[5] } : { sa:0, sb:0, p:M.pre, ma:null, mb:null };
 }
 
+// Elemente wiederverwenden statt neu bauen → Bilder bleiben geladen (wichtig fürs Replay)
+function reconcile(layer, want){
+  const have = layer._map ||= new Map(), keep = new Set();
+  for (const w of want){
+    let el = have.get(w.key);
+    if (!el || el._html !== w.html || el._cls !== w.cls){
+      if (el) el.remove();
+      el = document.createElement('div'); el.className = el._cls = w.cls; el.innerHTML = el._html = w.html;
+      if (w.ev != null) el.dataset.ev = w.ev;
+      layer.appendChild(el); have.set(w.key, el);
+    }
+    if (el._style !== w.style){ el.style.cssText = el._style = w.style; }
+    keep.add(w.key);
+  }
+  for (const [k, el] of have) if (!keep.has(k)){ el.remove(); have.delete(k); }
+}
+
 function renderCard(m){
   const card = document.getElementById('mu-'+m), M = S.H.m[m], V = S.view[m];
   const A = S.teams[M.a] || { name:'?' }, B = S.teams[M.b] || { name:'?' };
   const st = stateAt(m, V.cursor);
-  card.querySelector('.head').innerHTML = `
+  const head = card.querySelector('.head'), hk = M.a + '-' + M.b;
+  if (head._k !== hk){ head._k = hk;
+    head.innerHTML = `
     <div class="team a">${avHtml(A.avatar, A.name)}<div class="tn">${esc(A.name)}</div><div class="rec">${esc(A.record||'')}</div></div>
-    <div class="scores"><div class="sc"><b>${f2(st.sa)}</b><small>${st.ma!=null ? 'Proj. '+f1(st.ma) : '&nbsp;'}</small></div><div class="vs">VS</div>
-      <div class="sc"><b>${f2(st.sb)}</b><small>${st.mb!=null ? 'Proj. '+f1(st.mb) : '&nbsp;'}</small></div></div>
-    <div class="team b">${avHtml(B.avatar, B.name)}<div class="tn">${esc(B.name)}</div><div class="rec">${esc(B.record||'')}</div></div>`;
+    <div class="scores"><div class="sc"><b class="sa"></b><small class="ma"></small></div><div class="vs">VS</div>
+      <div class="sc"><b class="sb"></b><small class="mb"></small></div></div>
+    <div class="team b">${avHtml(B.avatar, B.name)}<div class="tn">${esc(B.name)}</div><div class="rec">${esc(B.record||'')}</div></div>`; }
+  head.querySelector('.sa').textContent = f2(st.sa); head.querySelector('.sb').textContent = f2(st.sb);
+  head.querySelector('.ma').textContent = st.ma != null ? 'Proj. ' + f1(st.ma) : ' ';
+  head.querySelector('.mb').textContent = st.mb != null ? 'Proj. ' + f1(st.mb) : ' ';
   card.querySelector('.pbar').innerHTML = `<span>${pct(st.p)}</span><div class="bar"><i class="a" style="width:${st.p*100}%"></i><i class="b" style="width:${(1-st.p)*100}%"></i></div><span>${pct(1-st.p)}</span>`;
   renderChart(card, m);
   renderTrack(card, m);
-  // Fußzeile: Peaks & Bad Beat
+  // Fußzeile: Hervorhebung, Peaks, Bad Beat, Pin-Knopf
   const all = [M.pre, ...M.pts.map(p => p[3])], peakA = Math.max(...all), peakB = 1 - Math.min(...all);
   const fin = S.allFinal && V.cursor == null && M.pts.length, chips = [];
+  const isFeat = card.classList.contains('featured'), pinned = S.settings.featured === 'team:' + M.a || S.settings.featured === 'team:' + M.b;
+  if (isFeat) chips.push(`<span class="chip feat">${S.settings.featured === 'closest' ? '🔥 Knappstes Matchup' : '📌 Hervorgehoben'}</span>`);
   chips.push(`<span class="chip"><i class="sw" style="background:var(--a)"></i>Peak ${pct(peakA)}</span>`);
   chips.push(`<span class="chip"><i class="sw" style="background:var(--b)"></i>Peak ${pct(peakB)}</span>`);
   if (fin){ const aWon = st.sa > st.sb, loserPeak = aWon ? peakB : peakA, loser = aWon ? B : A, winner = aWon ? A : B, winMin = aWon ? Math.min(...all) : 1 - Math.max(...all);
     if (loserPeak >= 0.85) chips.push(`<span class="chip bad">💀 Bad Beat: ${esc(loser.name)} hatte ${pct(loserPeak)}</span>`);
     if (winMin <= 0.15) chips.push(`<span class="chip good">🔥 Comeback: ${esc(winner.name)} lag bei ${pct(winMin)}</span>`); }
-  card.querySelector('.foot').innerHTML = chips.join('');
-  // Play-Liste
+  chips.push(`<button class="chip pin">${pinned ? '📌 Lösen' : '📌 Oben anzeigen'}</button>`);
+  const footHtml = chips.join(''), foot = card.querySelector('.foot');
+  if (foot._h !== footHtml) foot.innerHTML = foot._h = footHtml;
+  // Play-Liste (nur neu bauen, wenn sich etwas geändert hat)
   const ev = M.ev.filter(shown).slice().reverse();
+  const sig = ev.length + '|' + (ev[0]?.t || 0) + '|' + (ev[0]?.label || '');
+  const plist = card.querySelector('.plist');
+  if (plist._sig === sig) return;
+  plist._sig = sig;
   card.querySelector('.plays summary').textContent = `▾ Plays im Filter (${ev.length})`;
-  card.querySelector('.plist').innerHTML = ev.length ? ev.slice(0, 80).map(e => {
+  plist.innerHTML = ev.length ? ev.slice(0, 80).map(e => {
     const sideTeam = e.side === 'a' ? A : B, dp = (e.side==='a' ? e.p1 - e.p0 : e.p0 - e.p1)*100;
     return `<div class="pl"><div class="tm">${fmtT(e.t).replace(' ','<br>')}</div>
       <div><span class="nm"><span class="lg" style="box-shadow:0 0 0 2px var(--${e.side})">${avHtml(sideTeam.avatar, sideTeam.name)}</span>${esc(pname(e.pid))}</span> <span class="lb">· ${esc(e.label)}</span><div class="tm">${esc(sideTeam.name)}</div></div>
       <div class="pt">${e.d>0?'+':''}${f1(e.d)}<small>${dp>=0?'+':''}${dp.toFixed(1)}%</small></div></div>`; }).join('') : `<div class="empty">Noch keine Plays in diesem Filter.</div>`;
 }
 
-const DIM = () => ({ h: innerWidth < 600 ? 230 : 270, ml: 34, mr: 30, mt: 16, mb: 30 });
+const DIM = feat => ({ h: innerWidth < 600 ? (feat ? 270 : 230) : (feat ? 340 : 270), ml: 34, mr: 30, mt: 16, mb: 30 });
 function renderChart(card, m){
-  const box = card.querySelector('.chart'), W = box.clientWidth || 340, D = DIM(), H = D.h;
+  const box = card.querySelector('.chart'), W = box.clientWidth || 340, D = DIM(card.classList.contains('featured')), H = D.h;
   const x = timeScale(D.ml, W - D.mr), y = p => D.mt + (1 - p) * (H - D.mt - D.mb);
   const V = S.view[m], { pts, ev } = seriesFor(m, V.cursor);
   const M = S.H.m[m], A = S.teams[M.a], B = S.teams[M.b];
   let svg = `<svg width="${W}" height="${H}" role="img" aria-label="Siegwahrscheinlichkeit ${esc(A?.name)} gegen ${esc(B?.name)}">`;
-  // Raster
   for (const v of [0, .2, .4, .6, .8, 1]){ svg += `<line x1="${D.ml}" x2="${W-D.mr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>
     <text x="${D.ml-6}" y="${y(v)+3.5}" font-size="10" text-anchor="end" fill="var(--muted)">${v*100}%</text>`; }
   svg += `<line x1="${D.ml}" x2="${W-D.mr}" y1="${y(.5)}" y2="${y(.5)}" stroke="var(--line)" stroke-dasharray="3 4"/>`;
-  // X-Ticks (Kickoff-Zeiten)
   let lastX = -1e9; const ticks = [...x.kicks.map(t => ({ t, l1: fmtDay.format(t).replace('.',''), l2: fmtHM.format(t) }))];
   if (S.allFinal) ticks.push({ t: x.end, l1:'Final', l2:'' });
   for (const k of ticks){ const xx = x(k.t); if (xx - lastX < 44 && k.l1 !== 'Final') continue; if (k.l1==='Final' && xx - lastX < 30) continue; lastX = xx;
     svg += `<line x1="${xx}" x2="${xx}" y1="${D.mt}" y2="${H-D.mb}" stroke="var(--grid)"/>
       <text x="${xx}" y="${H-D.mb+13}" font-size="10" text-anchor="middle" fill="var(--muted)">${k.l1}</text>
       <text x="${xx}" y="${H-D.mb+25}" font-size="10" text-anchor="middle" fill="var(--muted)">${k.l2}</text>`; }
-  // Jetzt-Linie
   const now = S.ds.now();
   if (V.cursor == null && S.live && now > x.start && now < x.end) svg += `<line x1="${x(now)}" x2="${x(now)}" y1="${D.mt}" y2="${H-D.mb}" stroke="var(--live)" stroke-width="1" stroke-dasharray="2 3"/>`;
   if (V.cursor != null) svg += `<line x1="${x(V.cursor)}" x2="${x(V.cursor)}" y1="${D.mt}" y2="${H-D.mb}" stroke="var(--ink)" stroke-width="1" opacity=".35"/>`;
-  // Linien (mit Lücken gestrichelt, wenn keine Daten aufgezeichnet wurden)
   const GAPMS = Math.max(15*MIN, 6*S.settings.poll*1000), GL = CONFIG.GAME_MINUTES*MIN;
   const liveBetween = (a, b) => !S.games.length || S.games.some(g => g.start + 5*MIN < b - GAPMS/2 && g.start + GL > a + GAPMS/2);
   const path = (fy) => { let solid = '', dash = '';
@@ -680,7 +735,7 @@ function renderChart(card, m){
       if (i === 0){ solid += `M${X},${Y}`; return; }
       const q = pts[i-1], qx = x(q[0]).toFixed(1), qy = fy(q[3]).toFixed(1);
       const hop = S.settings.stepMode ? `L${X},${qy}L${X},${Y}` : `L${X},${Y}`;
-      if (p[0] - q[0] > GAPMS && liveBetween(q[0], p[0])){ dash += `M${qx},${qy}${hop.replace(/^L/, 'L')}`; solid += `M${X},${Y}`; }
+      if (p[0] - q[0] > GAPMS && liveBetween(q[0], p[0])){ dash += `M${qx},${qy}${hop}`; solid += `M${X},${Y}`; }
       else solid += hop; });
     return { solid, dash }; };
   for (const [side, fy] of [['b', p => y(1-p)], ['a', p => y(p)]]){
@@ -689,35 +744,31 @@ function renderChart(card, m){
       <path d="${solid}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
       ${dash ? `<path d="${dash}" fill="none" stroke="${c}" stroke-width="1.5" stroke-dasharray="3 4" opacity=".7"/>` : ''}`;
   }
-  svg += `<line class="xh" x1="0" x2="0" y1="${D.mt}" y2="${H-D.mb}" stroke="var(--ink)" stroke-width="1" opacity="0"/>`;
-  svg += `</svg>`;
-  // Marker (HTML-Ebene für Fotos)
-  let mk = '';
-  const placed = [];
-  const evs = ev.slice().sort((a,b) => a.t - b.t);
-  evs.forEach((e) => {
-    const X = x(e.t), base = e.side === 'a' ? y(e.p1) : y(1 - e.p1), big = isBig(e);
+  svg += `<line class="xh" x1="0" x2="0" y1="${D.mt}" y2="${H-D.mb}" stroke="var(--ink)" stroke-width="1" opacity="0"/></svg>`;
+  box.querySelector('svg').outerHTML = svg;
+  // Marker (HTML-Ebene, Elemente werden wiederverwendet)
+  const want = [], placed = [];
+  for (const e of ev.slice().sort((a,b) => a.t - b.t)){
+    const X = x(e.t), base = e.side === 'a' ? y(e.p1) : y(1 - e.p1), big = isBig(e), idx = M.ev.indexOf(e);
     let Y = base;
-    const idx = S.H.m[m].ev.indexOf(e);
-    if (big){   // große Marker nicht übereinander stapeln: abwechselnd nach oben/unten ausweichen
+    if (big){
       const lo = D.mt + 12, hi = H - D.mb - 12, dir = e.side === 'a' ? -1 : 1;
       Y = clamp(base, lo, hi);
       for (let k = 1; k <= 6 && placed.some(p => Math.hypot(p.x - X, p.y - Y) < 30); k++) Y = clamp(base + Math.ceil(k/2)*30*(k % 2 ? dir : -dir), lo, hi);
       placed.push({ x:X, y:Y });
-      if (Math.abs(Y - base) > 4) mk += `<div class="mk small" style="left:${X}px;top:${base}px;color:var(--${e.side});width:7px;height:7px;cursor:default"></div>`;
-    }
-    if (big){ const ph = photo(e.pid), nm = pname(e.pid);
-      mk += `<div class="mk big" data-ev="${idx}" style="left:${X}px;top:${Y}px;box-shadow:0 0 0 2px var(--${e.side}),0 0 0 4px #fff,0 2px 6px rgba(0,0,0,.2);background:hsl(${hueOf(nm)} 40% 45%)">${ph ? `<img src="${ph}" alt="" loading="lazy" onerror="this.parentNode.textContent='${esc(initials(nm))}'">` : esc(initials(nm))}</div>`; }
-    else mk += `<div class="mk small" data-ev="${idx}" style="left:${X}px;top:${Y}px;color:var(--${e.side})"></div>`;
-  });
-  // Team-Avatare am Linienende
+      if (Math.abs(Y - base) > 4) want.push({ key:'s'+idx, cls:'mk small', html:'', style:`left:${X}px;top:${base}px;color:var(--${e.side});width:7px;height:7px;cursor:default` });
+      const ph = photo(e.pid), nm = pname(e.pid);
+      want.push({ key:'b'+idx, ev: idx, cls:'mk big',
+        html: ph ? `<img src="${ph}" alt="" onerror="this.parentNode.textContent='${esc(initials(nm))}'">` : esc(initials(nm)),
+        style:`left:${X}px;top:${Y}px;box-shadow:0 0 0 2px var(--${e.side}),0 0 0 4px #fff,0 2px 6px rgba(0,0,0,.2);background:hsl(${hueOf(nm)} 40% 45%)` });
+    } else want.push({ key:'m'+idx, ev: idx, cls:'mk small', html:'', style:`left:${X}px;top:${Y}px;color:var(--${e.side})` });
+  }
   const lp = pts[pts.length-1];
   if (lp && pts.length > 1){ const X = x(lp[0]); let ya = y(lp[3]), yb = y(1 - lp[3]);
     if (Math.abs(ya - yb) < 30){ const mid = (ya + yb)/2, s = ya <= yb ? -1 : 1; ya = mid + s*15; yb = mid - s*15; }
-    mk += `<div class="mk endav" style="left:${X+16}px;top:${clamp(ya,14,H-D.mb-14)}px">${avHtml(A?.avatar, A?.name)}</div>`;
-    mk += `<div class="mk endav" style="left:${X+16}px;top:${clamp(yb,14,H-D.mb-14)}px">${avHtml(B?.avatar, B?.name)}</div>`; }
-  const tip = box.querySelector('.tip');
-  box.innerHTML = svg + mk; box.appendChild(tip);
+    want.push({ key:'endA', cls:'mk endav', html: avHtml(A?.avatar, A?.name), style:`left:${X+16}px;top:${clamp(ya,14,H-D.mb-14)}px` });
+    want.push({ key:'endB', cls:'mk endav', html: avHtml(B?.avatar, B?.name), style:`left:${X+16}px;top:${clamp(yb,14,H-D.mb-14)}px` }); }
+  reconcile(box.querySelector('.mks'), want);
   box._x = x; box._D = D; box._pts = pts;
 }
 
@@ -736,9 +787,35 @@ function renderTrack(card, m){
   card.querySelector('.spd').textContent = V.speed + '×';
 }
 
+/* ---------- Pop-ups bei großen Plays ---------- */
+const toastWorthy = e => S.settings.toastPts > 0 && !e.resid && !e.quiet && Math.abs(e.d) >= S.settings.toastPts;
+function showToast(m, e){
+  const card = document.getElementById('mu-'+m); if (!card) return;
+  const box = card.querySelector('.toasts'), M = S.H.m[m], T = S.teams[e.side === 'a' ? M.a : M.b] || { name:'?' };
+  const nm = pname(e.pid), ph = photo(e.pid);
+  const pOwn0 = e.side === 'a' ? e.p0 : 1 - e.p0, pOwn1 = e.side === 'a' ? e.p1 : 1 - e.p1;
+  const el = document.createElement('div');
+  el.className = 'toast'; el.style.setProperty('--c', `var(--${e.side})`);
+  el.innerHTML = `<div class="tph" style="background:hsl(${hueOf(nm)} 40% 45%)">${ph ? `<img src="${ph}" alt="" onerror="this.parentNode.textContent='${esc(initials(nm))}'">` : esc(initials(nm))}</div>
+    <div class="ttx"><b>${esc(nm)}</b> · ${esc(e.label)}<div class="tsub"><span class="lg">${avHtml(T.avatar, T.name)}</span>${esc(T.name)} · Siegchance ${Math.round(pOwn0*100)}% → <b>${Math.round(pOwn1*100)}%</b></div></div>
+    <div class="tpts ${e.d < 0 ? 'neg' : ''}">${e.d > 0 ? '+' : ''}${f1(e.d)}</div>`;
+  box.prepend(el);
+  while (box.children.length > (innerWidth < 600 ? 2 : 3)) box.lastElementChild.remove();
+  requestAnimationFrame(() => el.classList.add('on'));
+  setTimeout(() => { el.classList.remove('on'); setTimeout(() => el.remove(), 350); }, 5000);
+}
+// Neue Plays seit dem letzten Update erkennen (nicht beim ersten Laden)
+function announceNew(){
+  S.seen ||= new Set();
+  for (const m of S.matchups) for (const e of S.H.m[m].ev){
+    const k = e.pid + '|' + e.t; if (S.seen.has(k)) continue; S.seen.add(k);
+    if (S.announce && S.view[m]?.cursor == null && toastWorthy(e)) showToast(m, e);
+  }
+  S.announce = true;
+}
+
 function bindCard(card, m){
   const V = S.view[m], box = card.querySelector('.chart'), tr = card.querySelector('.track');
-  // Tooltip / Fadenkreuz
   const showTip = (px, py, html) => { const tip = box.querySelector('.tip'); tip.innerHTML = html; tip.classList.add('on');
     const bw = box.clientWidth, tw = tip.offsetWidth; tip.style.left = clamp(px + 12, 0, bw - tw) + 'px'; tip.style.top = Math.max(0, py - 60) + 'px'; };
   const hide = () => { box.querySelector('.tip')?.classList.remove('on'); const xh = box.querySelector('.xh'); if (xh) xh.setAttribute('opacity', 0); };
@@ -756,6 +833,11 @@ function bindCard(card, m){
   };
   box.addEventListener('pointermove', onPtr); box.addEventListener('pointerdown', onPtr);
   box.addEventListener('pointerleave', hide);
+  // Pin-Knopf
+  card.querySelector('.foot').addEventListener('click', e => { if (!e.target.closest('.pin')) return;
+    const M = S.H.m[m], pinned = S.settings.featured === 'team:' + M.a || S.settings.featured === 'team:' + M.b;
+    S.settings.featured = pinned ? 'none' : 'team:' + M.a; saveSettings(); renderAll();
+    if (!pinned) window.scrollTo({ top: 0, behavior: 'smooth' }); });
   // Replay-Steuerung
   const setCursor = cx => { const r = tr.getBoundingClientRect(), x = tr._x; let t = x.invert(cx - r.left);
     const lim = Math.min(S.ds.now(), x.end); if (t >= lim - 1000) t = null; V.cursor = t; renderCard(m); };
@@ -771,9 +853,11 @@ function bindCard(card, m){
     if (V.cursor == null || V.cursor >= lim) V.cursor = x.start;
     V.playing = true; let lastTs = performance.now();
     const step = ts => { if (!V.playing) return;
-      const dt = ts - lastTs; lastTs = ts;
+      const dt = ts - lastTs, prev = V.cursor; lastTs = ts;
       const u = x(V.cursor) + dt / 20000 * 1000 * V.speed;   // 1× = ganze Woche in 20 s
       V.cursor = x.invert(u);
+      // Pop-ups auch im Replay
+      for (const e of S.H.m[m].ev) if (e.t > prev && e.t <= V.cursor && toastWorthy(e)) showToast(m, e);
       if (V.cursor >= lim - 1000){ V.cursor = null; V.playing = false; }
       renderCard(m); if (V.playing) requestAnimationFrame(step); };
     requestAnimationFrame(step);
@@ -838,6 +922,13 @@ function openSettings(){
     <h3>Play-Filter</h3>
     <div class="checks">${Object.entries(CATS).map(([k,v]) => `<label><input type="checkbox" data-cat="${k}" ${F.cats.includes(k)?'checked':''}>${v}</label>`).join('')}</div>
     <div class="row" style="margin-top:12px"><label for="minpts">Mindest-Punkte pro Play: <b id="mpv">${F.minPts}</b></label><input type="range" id="minpts" min="0" max="10" step="0.5" value="${F.minPts}"></div>
+    <h3>Anzeige</h3>
+    <div class="row"><label for="feat">Oben hervorheben</label><select class="txt" id="feat">
+      <option value="none">Keins</option><option value="closest">Immer das knappste Matchup</option>
+      ${Object.entries(S.teams).sort((a,b) => a[1].name.localeCompare(b[1].name)).map(([rid,t]) => `<option value="team:${rid}">Matchup von ${esc(t.name)}</option>`).join('')}
+    </select><span class="hint">Erscheint groß ganz oben. Bei einem Team wird jede Woche dessen Matchup gezeigt. Alternativ: 📌 direkt am Matchup.</span></div>
+    <div class="row"><label for="toast">Pop-up bei Plays ab: <b id="toastv"></b></label><input type="range" id="toast" min="0" max="12" step="0.5" value="${F.toastPts}">
+      <span class="hint">Erscheint 5 Sekunden über dem Matchup – live und im Replay. 0 = aus.</span></div>
     <h3>Graph</h3>
     <div class="row"><label>Linie bewegt sich bei …</label><div class="seg" id="mode"><button data-v="0" class="${!F.stepMode?'on':''}">jeder Punktänderung</button><button data-v="1" class="${F.stepMode?'on':''}">nur gefilterten Plays</button></div>
       <span class="hint">„Nur gefilterte Plays“: kleine Punkte werden gesammelt und erst beim nächsten sichtbaren Play eingerechnet.</span></div>
@@ -852,6 +943,10 @@ function openSettings(){
   $('#panel').querySelectorAll('[data-cat]').forEach(c => c.onchange = () => { F.cats = [...$('#panel').querySelectorAll('[data-cat]:checked')].map(x => x.dataset.cat); custom(); });
   $('#minpts').oninput = e => { F.minPts = +e.target.value; $('#mpv').textContent = F.minPts; custom(); };
   $('#mode').onclick = e => { const b = e.target.closest('button'); if (!b) return; F.stepMode = b.dataset.v === '1'; $('#mode').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); saveSettings(); renderAll(); };
+  $('#feat').value = F.featured || 'none';
+  $('#feat').onchange = e => { F.featured = e.target.value; saveSettings(); renderAll(); };
+  const tv = () => $('#toastv').textContent = F.toastPts > 0 ? `${String(F.toastPts).replace('.', ',')} Punkten` : 'aus'; tv();
+  $('#toast').oninput = e => { F.toastPts = +e.target.value; tv(); saveSettings(); };
   $('#photos').onchange = e => { F.photos = e.target.checked; saveSettings(); renderAll(); };
   $('#poll').oninput = e => { F.poll = +e.target.value; $('#pollv').textContent = F.poll + 's'; saveSettings(); };
   $('#applyLid').onclick = () => { const v = $('#lid').value.trim(); if (!v) return; store.set('sfd:league', v); const u = new URL(location); u.searchParams.set('league', v); u.searchParams.delete('demo'); u.searchParams.delete('week'); location = u; };
@@ -1060,7 +1155,7 @@ function buildReplay(R){
       const pos = S.players[pid]?.pos, cl = classify(e.st, e.pts, pos);
       if (e.lab){ cl.label = e.lab; cl.cat = e.resid ? 'pts' : (pos === 'DEF' ? 'def' : cl.cat); cl.td = cl.td && !e.resid; }
       const p0 = stateAtT(e.t - 1).w.p, p1 = stateAtT(e.t).w.p;
-      return { t: e.t, side: A.starters.includes(pid) ? 'a' : 'b', pid, d: +f2(e.pts), p0: +p0.toFixed(4), p1: +p1.toFixed(4), ...cl };
+      return { t: e.t, side: A.starters.includes(pid) ? 'a' : 'b', pid, d: +f2(e.pts), p0: +p0.toFixed(4), p1: +p1.toFixed(4), resid: !!e.resid, quiet: /^Kickoff/.test(e.lab || ''), ...cl };
     });
   }
 }
@@ -1119,13 +1214,13 @@ function schedule(){
     if (document.hidden && !S.ds.demo) return schedule();
     try {
       const more = S.ds.demo ? S.ds.advance(60e3) : true;
-      await (S.mode === 'replay' ? refreshReplay() : tick()); S.errors = [];
+      await (S.mode === 'replay' ? refreshReplay() : tick()); S.errors = []; announceNew();
       if (!more){ renderAll(); return; }
     } catch(e){ console.error(e); S.errors = ['Update fehlgeschlagen: ' + e.message]; }
     renderAll(); schedule();
   }, ms);
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.ds && !S.ds.demo){ clearTimeout(S.timer); (S.mode === 'replay' ? refreshReplay() : tick()).then(renderAll).catch(()=>{}).finally(schedule); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.ds && !S.ds.demo){ clearTimeout(S.timer); (S.mode === 'replay' ? refreshReplay() : tick()).then(() => { renderAll(); announceNew(); }).catch(()=>{}).finally(schedule); } });
 
 async function main(){
   const q = new URLSearchParams(location.search);
@@ -1150,7 +1245,7 @@ async function main(){
       try { await refreshReplay(); }
       catch(e){ console.warn('Replay nicht möglich → Live-Aufzeichnung', e); S.mode = 'record'; S.H = store.get(S.hKey) || { m:{}, lastPP:{}, lastStats:{} }; await tick(); }
     }
-    shell(); renderAll(); schedule();
+    shell(); renderAll(); announceNew(); schedule();
   } catch(e){
     console.error(e);
     welcome(`Liga konnte nicht geladen werden (${e.message}). Stimmt die League-ID?`);
